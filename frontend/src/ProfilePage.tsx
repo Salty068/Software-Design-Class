@@ -15,11 +15,36 @@ export default function ProfilePage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && address1 && city && state && zip) {
-      if (zip.length < 5 || zip.length > 9) {
-        alert('Zip code must be between 5 and 9 characters.');
-        return;
-      }
+    
+    // Check required fields
+    if (!name.trim()) {
+      alert('Please enter your name.');
+      return;
+    }
+    
+    if (!address1.trim()) {
+      alert('Please enter your address.');
+      return;
+    }
+    
+    if (!city.trim()) {
+      alert('Please enter your city.');
+      return;
+    }
+    
+    if (!state) {
+      alert('Please select your state.');
+      return;
+    }
+    
+    if (!zip.trim()) {
+      alert('Please enter your zip code.');
+      return;
+    }
+    
+    if (zip.length < 5 || zip.length > 9) {
+      alert('Zip code must be between 5 and 9 characters.');
+      return;
     }
 
     if (skills.length === 0) {
@@ -32,7 +57,7 @@ export default function ProfilePage() {
       return;
     }
 
-    alert('Profile saved');
+    alert('Profile saved successfully!');
   };
 
 return (
