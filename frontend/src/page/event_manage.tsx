@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-/** ---------- Types ---------- */
 const URGENCY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
 type EventUrgency = (typeof URGENCY_OPTIONS)[number];
 
@@ -11,10 +10,10 @@ type EventItem = {
   location: string;
   requiredSkills: string[];
   urgency: EventUrgency;
-  eventDate: string; // ISO yyyy-mm-dd
+  eventDate: string;
 };
+type Form = Omit<EventItem, "id">;
 
-/** ---------- Placeholder backend calls (replace later) ---------- */
 async function fetchEvents(): Promise<EventItem[]> {
   return Promise.resolve([
     {
@@ -28,18 +27,16 @@ async function fetchEvents(): Promise<EventItem[]> {
     },
   ]);
 }
-
-async function createEvent(payload: Omit<EventItem, "id">): Promise<EventItem> {
+async function createEvent(payload: Form): Promise<EventItem> {
   return Promise.resolve({ id: crypto.randomUUID(), ...payload });
 }
-async function updateEvent(id: string, payload: Omit<EventItem, "id">) {
+async function updateEvent(id: string, payload: Form) {
   return Promise.resolve({ id, ...payload });
 }
 async function deleteEvent(_id: string) {
   return Promise.resolve();
 }
 
-/** ---------- Constants ---------- */
 const ALL_SKILLS = [
   "Teamwork",
   "Lifting",
@@ -50,68 +47,57 @@ const ALL_SKILLS = [
   "Logistics",
 ];
 
-const pageBg = "bg-[#ede5d9] text-[#2b1f14]";
-const cardBase =
-  "rounded-[32px] border border-[#c9b08e] bg-[#ede5d9]/90 shadow-[0_18px_32px_-12px_rgba(114,91,60,0.35)]";
-const buttonBase =
-  "inline-flex items-center gap-2 rounded-2xl px-5 py-3 font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#c9b08e]/40 disabled:cursor-not-allowed disabled:opacity-60";
-const primaryButton =
-  `${buttonBase} bg-[#a57b42] text-white shadow-[0_3px_10px_rgba(167,131,80,0.25)] hover:bg-[#b79568]`;
-const dangerButton =
-  `${buttonBase} bg-rose-500 text-white shadow-md hover:bg-rose-600`;
-const inputBase =
-  "w-full rounded-2xl border border-[#c9b08e] bg-[#ede5d9] px-4 py-3 text-[#2b1f14] shadow-sm placeholder:text-[#b79568] focus:border-[#b79568] focus:ring-4 focus:ring-[#c9b08e]/40 focus:outline-none";
+const PAGE_CLASS = "bg-stone-100 text-stone-900";
+const CARD_CLASS = "rounded-2xl border border-amber-200 bg-white shadow";
+const BUTTON_BASE =
+  "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium transition focus:outline-none focus:ring-2 focus:ring-amber-200 disabled:cursor-not-allowed disabled:opacity-60";
+const PRIMARY_BUTTON = `${BUTTON_BASE} bg-amber-600 text-white hover:bg-amber-500`;
+const DANGER_BUTTON = `${BUTTON_BASE} bg-rose-500 text-white hover:bg-rose-600`;
+const INPUT_CLASS =
+  "w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-stone-900 placeholder:text-stone-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-200 focus:outline-none";
 
-/** ---------- Component ---------- */
 export default function EventManage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Form state
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("");
-  const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
-  const [urgency, setUrgency] = useState<EventUrgency>("Low");
-  const [eventDate, setEventDate] = useState("");
+  const emptyForm: Form = {
+    name: "",
+    description: "",
+    location: "",
+    requiredSkills: [],
+    urgency: "Low",
+    eventDate: "",
+  };
+  const [form, setForm] = useState<Form>(emptyForm);
 
-  // UI state
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /** ---------- Load events ---------- */
   useEffect(() => {
     setLoading(true);
     fetchEvents()
-      .then((data) => setEvents(data))
+      .then(setEvents)
       .catch(() => setError("Failed to load events."))
       .finally(() => setLoading(false));
   }, []);
 
-  /** ---------- Helpers ---------- */
+  const set = <K extends keyof Form>(k: K, v: Form[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
   const resetForm = () => {
-    setName("");
-    setDescription("");
-    setLocation("");
-    setRequiredSkills([]);
-    setUrgency("Low");
-    setEventDate("");
+    setForm(emptyForm);
     setSelectedId(null);
     setMode("create");
     setError(null);
   };
 
   const hydrateFormForEdit = (e: EventItem) => {
-    setName(e.name);
-    setDescription(e.description);
-    setLocation(e.location);
-    setRequiredSkills(e.requiredSkills);
-    setUrgency(e.urgency);
-    setEventDate(e.eventDate);
+    const { id, ...rest } = e;
+    setForm(rest);
     setMode("edit");
-    setSelectedId(e.id);
+    setSelectedId(id);
   };
 
   const handleSelectEvent = (id: string) => {
@@ -119,49 +105,49 @@ export default function EventManage() {
     if (e) hydrateFormForEdit(e);
   };
 
-  const toggleSkill = (s: string) => {
-    setRequiredSkills((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
-  };
+  const toggleSkill = (s: string) =>
+    setForm((f) => ({
+      ...f,
+      requiredSkills: f.requiredSkills.includes(s)
+        ? f.requiredSkills.filter((x) => x !== s)
+        : [...f.requiredSkills, s],
+    }));
 
   const validate = (): string | null => {
-    if (!name.trim()) return "Event Name is required.";
-    if (name.trim().length > 100) return "Event Name must be ≤ 100 characters.";
-    if (!description.trim()) return "Event Description is required.";
-    if (!location.trim()) return "Location is required.";
-    if (requiredSkills.length === 0) return "Select at least one Required Skill.";
-    if (!urgency) return "Urgency is required.";
-    if (!eventDate) return "Event Date is required.";
+    if (!form.name.trim()) return "Event Name is required.";
+    if (form.name.trim().length > 100)
+      return "Event Name must be ≤ 100 characters.";
+    if (!form.description.trim()) return "Event Description is required.";
+    if (!form.location.trim()) return "Location is required.";
+    if (form.requiredSkills.length === 0)
+      return "Select at least one Required Skill.";
+    if (!form.urgency) return "Urgency is required.";
+    if (!form.eventDate) return "Event Date is required.";
     return null;
   };
 
-  const payload = (): Omit<EventItem, "id"> => ({
-    name: name.trim(),
-    description: description.trim(),
-    location: location.trim(),
-    requiredSkills,
-    urgency,
-    eventDate,
-  });
-
   const handleSave = async () => {
     const v = validate();
-    if (v) {
-      setError(v);
-      return;
-    }
+    if (v) return setError(v);
     setSaving(true);
     try {
       if (mode === "create") {
-        const created = await createEvent(payload());
+        const created = await createEvent({
+          ...form,
+          name: form.name.trim(),
+          description: form.description.trim(),
+          location: form.location.trim(),
+        });
         setEvents((prev) => [created, ...prev]);
         hydrateFormForEdit(created);
-      } else if (mode === "edit" && selectedId) {
-        const updated = await updateEvent(selectedId, payload());
-        setEvents((prev) =>
-          prev.map((e) => (e.id === selectedId ? updated : e))
-        );
+      } else if (selectedId) {
+        const updated = await updateEvent(selectedId, {
+          ...form,
+          name: form.name.trim(),
+          description: form.description.trim(),
+          location: form.location.trim(),
+        });
+        setEvents((prev) => prev.map((e) => (e.id === selectedId ? updated : e)));
         hydrateFormForEdit(updated);
       }
     } catch {
@@ -185,167 +171,159 @@ export default function EventManage() {
     }
   };
 
-  const listItems = useMemo(
-    () =>
-      events.map((event) => {
-        const isActive = selectedId === event.id;
-        return (
-          <li
-            key={event.id}
-            onClick={() => handleSelectEvent(event.id)}
-            className={`cursor-pointer rounded-[28px] border border-[#c9b08e] bg-[#ede5d9]/85 px-5 py-4 shadow-[0_2px_10px_rgba(167,131,80,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(167,131,80,0.28)] ${
-              isActive ? "bg-[#c9b08e]/60" : ""
-            }`}
-          >
-            <div className="mb-1 text-lg font-semibold text-[#2b1f14]">{event.name}</div>
-            <div className="text-sm text-[#725b3c]">
-              {new Date(event.eventDate).toLocaleDateString()} • {event.urgency}
-            </div>
-          </li>
-        );
-      }),
-    [events, selectedId]
-  );
-
   return (
-    <div className={`grid min-h-screen w-full grid-cols-1 bg-cover lg:grid-cols-[360px_minmax(0,1fr)] ${pageBg}`}>
-      <aside className="flex h-full flex-col bg-[#ede5d9] p-6 lg:p-8">
-        <div className={`${cardBase} flex h-full flex-col gap-5 overflow-hidden p-5 lg:p-6`}>
-          <div className="flex items-center justify-between gap-4 rounded-2xl border border-[#c9b08e] bg-[#dbcab3] px-4 py-3 shadow-[0_8px_22px_rgba(167,131,80,0.28)]">
-            <span className="rounded-2xl bg-[#ede5d9] px-4 py-2 text-lg font-semibold text-[#2b1f14] shadow-sm">
+    <div
+      className={`grid min-h-screen w-full grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)] ${PAGE_CLASS}`}
+    >
+      <aside className="flex h-full flex-col bg-stone-100 p-6 lg:p-8">
+        <div className={`${CARD_CLASS} flex h-full flex-col gap-4 overflow-hidden p-5 lg:p-6`}>
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <span className="rounded-lg bg-white px-4 py-2 text-lg font-semibold text-stone-900 shadow-sm">
               Events
             </span>
-            <button className={primaryButton} onClick={resetForm}>
-              + New
-            </button>
+            <button className={PRIMARY_BUTTON} onClick={resetForm}>+ New</button>
           </div>
 
           <div className="flex-1 overflow-y-auto pr-2">
             {loading ? (
-              <div className="text-[#725b3c]">Loading events…</div>
+              <div className="text-stone-500">Loading events…</div>
             ) : events.length === 0 ? (
-              <div className="text-[#725b3c]">No events yet.</div>
+              <div className="text-stone-500">No events yet.</div>
             ) : (
-              <ul className="space-y-3 pr-1">{listItems}</ul>
+              <ul className="space-y-3 pr-1">
+                {events.map((e) => {
+                  const isActive = selectedId === e.id;
+                  return (
+                    <li
+                      key={e.id}
+                      onClick={() => handleSelectEvent(e.id)}
+                      className={`cursor-pointer rounded-lg border border-amber-200 bg-white px-4 py-3 shadow-sm transition hover:bg-amber-50 ${isActive ? "ring-2 ring-amber-300" : ""}`}
+                    >
+                      <div className="mb-1 text-lg font-semibold text-stone-900">{e.name}</div>
+                      <div className="text-sm text-stone-500">
+                        {new Date(e.eventDate).toLocaleDateString()} • {e.urgency}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </div>
       </aside>
 
-      <main className="flex h-full flex-col bg-[#ede5d9] p-5 lg:p-7">
-        <div className={`${cardBase} flex h-full flex-col gap-5 overflow-hidden p-5 lg:p-7`}>
-          <div className="flex flex-col gap-3 rounded-2xl border border-[#c9b08e] bg-[#dbcab3] px-5 py-4 shadow-[0_8px_22px_rgba(167,131,80,0.28)] sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="rounded-2xl bg-[#ede5d9] px-6 py-3 text-2xl font-bold text-[#2b1f14] shadow-md">
+      <main className="flex h-full flex-col bg-stone-100 p-6 lg:p-8">
+        <div className={`${CARD_CLASS} flex h-full flex-col gap-4 overflow-hidden p-6 lg:p-8`}>
+          <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="rounded-lg bg-white px-5 py-3 text-2xl font-bold text-stone-900 shadow-sm">
               {mode === "create" ? "Create Event" : "Manage Event"}
             </h2>
             <div className="flex items-center gap-3">
               {mode === "edit" && (
-                <button className={dangerButton} disabled={saving} onClick={handleDelete}>
+                <button className={DANGER_BUTTON} disabled={saving} onClick={handleDelete}>
                   Delete
                 </button>
               )}
-              <button className={primaryButton} disabled={saving} onClick={handleSave}>
+              <button className={PRIMARY_BUTTON} disabled={saving} onClick={handleSave}>
                 {mode === "create" ? "Create" : "Save"}
               </button>
             </div>
           </div>
 
           {error && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50/90 px-4 py-3 text-rose-700 shadow-sm">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-600">
               {error}
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto rounded-[28px] border border-[#c9b08e] bg-[#dbcab3]/60 p-6 shadow-inner">
+          <div className="flex-1 overflow-y-auto rounded-xl border border-amber-200 bg-amber-50 p-6">
             <div className="grid gap-6 lg:grid-cols-2">
               <label className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-[#4c3a29]">
+                <span className="text-sm font-semibold text-stone-700">
                   Event Name<span className="ml-1 text-rose-500">*</span>
                 </span>
                 <input
                   type="text"
                   maxLength={100}
                   placeholder="Up to 100 characters"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className={inputBase}
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  className={INPUT_CLASS}
                 />
               </label>
 
               <label className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-[#4c3a29]">
+                <span className="text-sm font-semibold text-stone-700">
                   Event Date<span className="ml-1 text-rose-500">*</span>
                 </span>
                 <input
                   type="date"
-                  value={eventDate}
-                  onChange={(event) => setEventDate(event.target.value)}
-                  className={inputBase}
+                  value={form.eventDate}
+                  onChange={(e) => set("eventDate", e.target.value)}
+                  className={INPUT_CLASS}
                 />
               </label>
 
               <label className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-[#4c3a29]">
+                <span className="text-sm font-semibold text-stone-700">
                   Urgency<span className="ml-1 text-rose-500">*</span>
                 </span>
                 <select
-                  value={urgency}
-                  onChange={(event) => setUrgency(event.target.value as EventUrgency)}
-                  className={`${inputBase} appearance-none bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 24 24%22 stroke=%22%23a57b42%22%3E%3Cpath stroke-linecap=%22round%22 stroke-linejoin=%22round%22 stroke-width=%221.5%22 d=%22m6 9 6 6 6-6%22/%3E%3C/svg%3E')] bg-[length:1.25rem] bg-[right_1rem_center] bg-no-repeat`}
+                  value={form.urgency}
+                  onChange={(e) => set("urgency", e.target.value as EventUrgency)}
+                  className={`${INPUT_CLASS} appearance-none pr-10`}
                 >
-                  {URGENCY_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                  {URGENCY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
               </label>
 
               <label className="flex flex-col gap-2 lg:col-span-2">
-                <span className="text-sm font-semibold text-[#4c3a29]">
+                <span className="text-sm font-semibold text-stone-700">
                   Location<span className="ml-1 text-rose-500">*</span>
                 </span>
                 <textarea
                   rows={2}
                   placeholder="Address, instructions, etc."
-                  value={location}
-                  onChange={(event) => setLocation(event.target.value)}
-                  className={`${inputBase} min-h-[96px] resize-y`}
+                  value={form.location}
+                  onChange={(e) => set("location", e.target.value)}
+                  className={`${INPUT_CLASS} min-h-[96px] resize-y`}
                 />
               </label>
 
               <label className="flex flex-col gap-2 lg:col-span-2">
-                <span className="text-sm font-semibold text-[#4c3a29]">
+                <span className="text-sm font-semibold text-stone-700">
                   Event Description<span className="ml-1 text-rose-500">*</span>
                 </span>
                 <textarea
                   rows={5}
                   placeholder="Describe the event goals, tasks, and details…"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  className={`${inputBase} min-h-[160px] resize-y`}
+                  value={form.description}
+                  onChange={(e) => set("description", e.target.value)}
+                  className={`${INPUT_CLASS} min-h-[160px] resize-y`}
                 />
               </label>
 
               <div className="flex flex-col gap-2 lg:col-span-2">
-                <span className="text-sm font-semibold text-[#4c3a29]">
+                <span className="text-sm font-semibold text-stone-700">
                   Required Skills<span className="ml-1 text-rose-500">*</span>
                 </span>
                 <div className="flex flex-wrap gap-3">
-                  {ALL_SKILLS.map((skill) => {
-                    const isSelected = requiredSkills.includes(skill);
+                  {ALL_SKILLS.map((s) => {
+                    const on = form.requiredSkills.includes(s);
                     return (
                       <button
-                        key={skill}
+                        key={s}
                         type="button"
-                        onClick={() => toggleSkill(skill)}
-                        className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                          isSelected
-                            ? "border-[#a57b42] bg-[#a57b42] text-white shadow-[0_6px_14px_rgba(165,123,66,0.35)]"
-                            : "border-[#c9b08e] bg-[#ede5d9] text-[#725b3c] hover:bg-[#dbcab3]"
+                        onClick={() => toggleSkill(s)}
+                        className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                          on
+                            ? "border-amber-500 bg-amber-500 text-white"
+                            : "border-amber-200 bg-white text-stone-600 hover:bg-amber-50"
                         }`}
                       >
-                        {skill}
+                        {s}
                       </button>
                     );
                   })}
