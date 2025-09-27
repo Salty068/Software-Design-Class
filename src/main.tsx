@@ -1,18 +1,36 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, RouterProvider, Link } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Outlet, Link } from "react-router-dom";
+import Header from './components/Header.tsx';
 import './index.css'
 import App from './App.tsx'
+import VolunteerMatchingDemo from './components/VolunteerMatching.tsx';
+import { NotificationProvider } from "./components/NotificationProvider.tsx";
+
+function Layout() {
+  return (
+    <>
+      <Header />
+      <Outlet />
+    </>
+  );
+}
+
 
 const router = createBrowserRouter([
-    { path: "/", element: <App /> },
-])
+  {
+    element: <Layout />,
+    children: [
+      { path: "/", element: <App /> },
+      { path: "/volunteer-matching", element: <VolunteerMatchingDemo /> },
+    ],
+  },
+]);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <nav className="p-4 space-x-4">
-      <Link to="/">Home</Link><Link to="/">About</Link>
-    </nav>
-    <RouterProvider router={router} />
+    <NotificationProvider>
+      <RouterProvider router={router} />
+    </NotificationProvider>
   </StrictMode>
 );
