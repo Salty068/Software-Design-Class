@@ -8,6 +8,8 @@ import ProfilePage from './pages/ProfilePage.tsx'
 import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
 import VolunteerMatchingDemo from './pages/VolunteerMatching.tsx';
+import EventManage from './pages/event_manage.tsx';
+import VolunteerHistory from './pages/volunteer_history.tsx';
 import { NotificationProvider } from "./components/NotificationProvider.tsx";
 
 function Layout() {
@@ -29,7 +31,9 @@ const router = createBrowserRouter([
       { path: "/volunteer-matching", element: <VolunteerMatchingDemo /> },
       { path: "/profile-page", element: <ProfilePage/>},
       { path: "/login", element: <Login />},
-      { path: "/register", element: <Register />}
+      { path: "/register", element: <Register />},
+      { path: "/event-manage", element:<EventManage/>},
+      { path: "/volunteer-history", element: <VolunteerHistory/>}
     ],
   },
 ]);

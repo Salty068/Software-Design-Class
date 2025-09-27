@@ -26,10 +26,11 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  display: block;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #ede5d9;
+  color: inherit;
 }
 
 h1 {
