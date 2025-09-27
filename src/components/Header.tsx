@@ -25,6 +25,8 @@ export default function Header() {
             <NavLink to="/login" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Login</NavLink>
             <NavLink to="/register" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Register</NavLink>
             <NavLink to="/profile-page" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Profile Page</NavLink>
+            <NavLink to="/event-manage" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Event Manage</NavLink>
+            <NavLink to="/volunteer-history" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Volunteer History</NavLink>
 
             <button
               
