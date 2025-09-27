@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { registerUser } from '../../../../frontend/src/services/authService';
+// import { registerUser } from '../../../../frontend/src/services/authService';
 
 export default function Register() {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'volunteer' });

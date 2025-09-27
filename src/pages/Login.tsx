@@ -1,25 +1,25 @@
-import React, { useState}  from 'react';
-import type { ChangeEvent, FormEvent }  from 'react';
-// import { loginUser } from '../../../../frontend/src/services/authService';
+import React, { useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
+
+type LoginForm = { email: string; password: string };
 
 export default function Login() {
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState<LoginForm>({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
 
- const handleChange = (e: ChangeEvent<HTMLInputElement>) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target as HTMLInputElement;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    // const data = await loginUser(form);
-    const data = {token:"1212414214"}
+    const data = { token: '1212414214' };
     setLoading(false);
     if (data.token) {
       alert('Logged in!');
       console.log(data);
-    } else {
-      // alert(data.msg || 'Login failed');
     }
   };
 
