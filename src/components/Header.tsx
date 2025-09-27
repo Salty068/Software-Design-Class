@@ -18,11 +18,13 @@ export default function Header() {
   return (
     <>
       <header >
-        <div >
-          <Link to="/" >Volunteer App</Link>
-          <nav >
+        <div className="space-y-2 flex items-center gap-6">
+          <nav className="space-y-2 flex items-center gap-6">
             <NavLink to="/" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Home</NavLink>
             <NavLink to="/volunteer-matching" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Volunteer Matching</NavLink>
+            <NavLink to="/login" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Login</NavLink>
+            <NavLink to="/register" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Register</NavLink>
+            <NavLink to="/profile-page" className={({isActive}) => isActive ? "font-medium" : "opacity-70 hover:opacity-100"}>Profile Page</NavLink>
 
             <button
               
