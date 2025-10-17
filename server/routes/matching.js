@@ -25,6 +25,9 @@ matching.get("/volunteer/:id", (req, res) => {
 
 matching.post("/assign", (req, res) => {
   const { volunteerId, eventId } = req.body || {};
+  if (!volunteerId || !eventId) {
+    return res.status(400).json({ error: "volunteerId and eventId required" });
+  }
   const v = store.getVolunteer(volunteerId);
   const e = store.getEvent(eventId);
   if (!v || !e) return res.status(404).json({ error: "not found" });

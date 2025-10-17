@@ -6,20 +6,16 @@ export default defineConfig({
     include: ["server/**/*.test.{js,ts}"],
     watch: false,
     coverage: {
-      provider: "v8",
-      reporter: ["text", "html", "lcov"],
-      reportsDirectory: "./coverage",
-      all: true,
-      include: ["server/**/*.js"],
-      exclude: [
-        "server/**/server.js",
-        "**/node_modules/**",
-        "**/dist/**"
-      ],
-      lines: 80,
-      functions: 80,
-      branches: 80,
-      statements: 80
+        provider: "v8",
+        reporter: ["text","html","lcov"],
+        all: true,
+        include: ["server/**/*.js"],
+        exclude: [
+            "server/server.js",          // Vite glue
+            "server/models.js",          // types only
+            "server/demo_data/**"
+        ],
+        lines: 80, functions: 80, branches: 80, statements: 80
     }
   }
 });
