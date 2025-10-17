@@ -14,3 +14,5 @@ export function score(vol, ev) {
   if (sSkills === 0 && sLoc === 0){ wUrg = 0};
   return +(0.6*sSkills + 0.2*sLoc + 0.2*sTime*wUrg).toFixed(4);
 }
+
+export default { score }

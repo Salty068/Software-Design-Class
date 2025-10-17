@@ -40,3 +40,4 @@ matching.get("/volunteers", (_req, res) => {
 matching.get("/events", (_req, res) => {
   res.json(store.listEvents());
 });
+

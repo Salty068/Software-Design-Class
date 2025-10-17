@@ -2,32 +2,37 @@ import fs from "fs/promises";
 import path from "path";
 import express from "express";
 import { fileURLToPath } from "url";
+
 import { matching } from "./routes/matching.js";
 import { notifications } from "./routes/notifications.js";
 import { startReminders } from "./services/notifications.js";
 
-import { store } from "./store.memory.js";           
+import { store } from "./store.memory.js";
 import { demoVols, demoEvents } from "./demo_data/volunteer_events.data.js";
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..");
 const dist = path.resolve(root, "dist");
 
-async function createServer() {
+export async function buildApp() {
   const app = express();
   app.use(express.json());
 
+  // seed before routes
+  store.upsertVolunteers(demoVols);
+  store.upsertEvents(demoEvents);
+
+  // APIs
   app.use("/api/match", matching);
   app.use("/api/notifications", notifications);
-  startReminders();
 
-    //no use for this at the moment
+  // health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+  // Vite middleware only outside tests
   let vite = null;
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({ server: { middlewareMode: true }, appType: "custom", root });
     app.use(vite.middlewares);
@@ -35,8 +40,7 @@ async function createServer() {
 
   app.use(express.static(dist));
 
-
-  //regex to match everything but the api to display pages
+  // serve index.html for non-API routes
   app.get(/^(?!\/api).*/, async (req, res, next) => {
     try {
       if (vite) {
@@ -53,12 +57,15 @@ async function createServer() {
     }
   });
 
-  store.upsertVolunteers(demoVols); //Example volunteer addition
-  store.upsertEvents(demoEvents); //Example event addition
+  // start reminder loop only when not testing
+  if (process.env.NODE_ENV !== "test") startReminders();
 
-  //if .env doesn't exist push on port 3000
+  return app;
+}
+
+// start listener only when not testing
+if (process.env.NODE_ENV !== "test") {
+  const app = await buildApp();
   const port = process.env.PORT || 3000;
   app.listen(port, () => console.log(`http://localhost:${port}`));
 }
-
-createServer();
