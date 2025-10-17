@@ -14,7 +14,9 @@ async function createServer() {
   const app = express();
   app.use(express.json());
 
-    //no use for this at the moment
+  let apiRouter = null;
+
+  //no use for this at the moment
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
   let vite = null;
@@ -22,6 +24,22 @@ async function createServer() {
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({ server: { middlewareMode: true }, appType: "custom", root });
     app.use(vite.middlewares);
+  }
+
+  try {
+    if (vite) {
+      const mod = await vite.ssrLoadModule("/server/api/index.js");
+      apiRouter = mod?.default ?? null;
+    } else {
+      const mod = await import("./api/index.js");
+      apiRouter = mod?.default ?? null;
+    }
+  } catch (error) {
+    console.warn("API router not mounted.", error);
+  }
+
+  if (apiRouter) {
+    app.use("/api", apiRouter);
   }
 
   app.use(express.static(dist));

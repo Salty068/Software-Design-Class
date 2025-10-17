@@ -1,30 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
-type EngagementLevel = "Low" | "Medium" | "High" | "Critical";
-type ParticipationStatus =
-  | "Registered"
-  | "Confirmed"
-  | "CheckedIn"
-  | "NoShow"
-  | "Cancelled"
-  | "Completed";
+const STATUS_OPTIONS = ["Registered", "Confirmed", "CheckedIn", "NoShow", "Cancelled", "Completed"] as const;
+type ParticipationStatus = (typeof STATUS_OPTIONS)[number];
 
 type VolunteerHistoryItem = {
   id: string;
-  name: string;
-  description: string;
+  volunteerId: string;
+  volunteerName: string;
+  assignment: string;
   location: string;
-  requiredSkills: string[];
-  urgency: EngagementLevel;
   eventDate: string;
   status: ParticipationStatus;
-  volunteerId?: string;
-  volunteerName?: string;
-  hours?: number;
-  notes?: string;
+  hours: number;
 };
 
-type SortKey = "eventDate" | "name" | "urgency" | "status";
+type SortKey = "eventDate" | "volunteerName" | "assignment" | "status";
 type SortDir = "asc" | "desc";
 
 type VolunteerHistoryParams = {
@@ -34,33 +24,20 @@ type VolunteerHistoryParams = {
   sortDir: SortDir;
   search: string;
   filters: {
-    urgency: string[];
-    status: string[];
+    status: ParticipationStatus[];
     dateFrom?: string;
     dateTo?: string;
   };
 };
 
 type VolunteerHistoryResponse = { items: VolunteerHistoryItem[]; total: number };
-
-const ENGAGEMENT_OPTIONS: EngagementLevel[] = ["Low", "Medium", "High", "Critical"];
-const STATUS_OPTIONS: ParticipationStatus[] = [
-  "Registered",
-  "Confirmed",
-  "CheckedIn",
-  "NoShow",
-  "Cancelled",
-  "Completed",
-];
 const TABLE_COLUMNS = [
   { key: "volunteerName", label: "Volunteer" },
-  { key: "name", label: "Assignment" },
+  { key: "assignment", label: "Assignment" },
   { key: "eventDate", label: "Last Activity" },
   { key: "status", label: "Status" },
   { key: "hours", label: "Hours" },
-  { key: "requiredSkills", label: "Skills" },
   { key: "location", label: "Location" },
-  { key: "description", label: "Notes" },
 ];
 
 const DEFAULT_SORT_KEY: SortKey = "eventDate";
@@ -76,130 +53,69 @@ const INPUT_CLASS =
   "w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-stone-900 placeholder:text-stone-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-200 focus:outline-none";
 
 
+type ApiSuccess<T> = { data: T };
+type ApiError = { error: string };
+
+const HISTORY_ENDPOINT = "/api/volunteer-history";
+
+const readJson = async <T,>(res: Response): Promise<T> => {
+  const text = await res.text();
+  return text ? (JSON.parse(text) as T) : ({} as T);
+};
+
+const handleResponse = async <T,>(res: Response): Promise<T> => {
+  const body = await readJson<ApiSuccess<T> | ApiError>(res);
+  if (!res.ok) {
+    const message = "error" in body && body.error ? body.error : "Request failed.";
+    throw new Error(message);
+  }
+  return "data" in body ? body.data : (undefined as T);
+};
+
 async function fetchVolunteerHistory(params: VolunteerHistoryParams): Promise<VolunteerHistoryResponse> {
-  const roster = [ //placeholder data
-    {
-      volunteerName: "Jordan Smith",
-      volunteerId: "vol-001",
-      location: "Houston, TX",
-      skills: ["skill1", "skill2", "skill3"],
-      engagement: "High" as EngagementLevel,
-      status: "Confirmed" as ParticipationStatus,
-      assignment: "Emergency Shelter Intake",
-      hours: 62,
-      description:
-        "description",
-      lastActivity: "2025-02-14",
-    },
-    {
-      volunteerName: "John Smith",
-      volunteerId: "vol-002",
-      location: "Houston, TX",
-      skills: ["skill1", "skill2", "skill3"],
-      engagement: "Critical" as EngagementLevel,
-      status: "CheckedIn" as ParticipationStatus,
-      assignment: "Mobile Wellness Clinic",
-      hours: 88,
-      description:
-        "description",
-      lastActivity: "2025-02-11",
-    },
-    {
-      volunteerName: "Miguel Hernandez",
-      volunteerId: "vol-003",
-      location: "Houston, TX",
-      skills: ["skill1", "skill2", "skill3"],
-      engagement: "Medium" as EngagementLevel,
-      status: "Completed" as ParticipationStatus,
-      assignment: "Warehouse Logistics",
-      hours: 47,
-      description:
-        "description",
-      lastActivity: "2025-01-29",
-    },
-    {
-      volunteerName: "Jack Lee",
-      volunteerId: "vol-004",
-      location: "Houston, TX",
-      skills: ["skill1", "skill2", "skill3"],
-      engagement: "High" as EngagementLevel,
-      status: "Registered" as ParticipationStatus,
-      assignment: "Neighborhood Outreach Canvassing",
-      hours: 33,
-      description: "description",
-      lastActivity: "2025-02-05",
-    },
-    {
-      volunteerName: "Morgan Davis",
-      volunteerId: "vol-005",
-      location: "Houston, TX",
-      skills: ["skill1", "skill2", "skill3"],
-      engagement: "Low" as EngagementLevel,
-      status: "NoShow" as ParticipationStatus,
-      assignment: "Intake Data QA",
-      hours: 12,
-      description:
-        "description",
-      lastActivity: "2025-01-18",
-    },
-  ];
-
-  const seed: VolunteerHistoryItem[] = Array.from({ length: 30 }, (_, i) => {
-    const b = roster[i % roster.length];
-    const dt = new Date(b.lastActivity);
-    dt.setDate(dt.getDate() - (i % 14) * 2);
-    return {
-      id: `history-${i + 1}`,
-      name: b.assignment,
-      description: b.description,
-      location: b.location,
-      requiredSkills: b.skills,
-      urgency: b.engagement,
-      eventDate: dt.toISOString().slice(0, 10),
-      status: STATUS_OPTIONS[(STATUS_OPTIONS.indexOf(b.status) + (i % 3)) % STATUS_OPTIONS.length],
-      volunteerName: b.volunteerName,
-      volunteerId: b.volunteerId,
-      hours: b.hours + (i % 5) * 2,
-      notes: b.description,
-    };
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    sortKey: params.sortKey,
+    sortDir: params.sortDir,
+    search: params.search,
+    status: params.filters.status.join(","),
+    dateFrom: params.filters.dateFrom ?? "",
+    dateTo: params.filters.dateTo ?? "",
   });
-
-  const { search, filters, sortKey, sortDir, page, pageSize } = params;
-  const term = search.trim().toLowerCase();
-  const filtered = seed.filter((x) => {
-    const t =
-      !term ||
-      x.name.toLowerCase().includes(term) ||
-      x.location.toLowerCase().includes(term) ||
-      x.description.toLowerCase().includes(term) ||
-      (x.volunteerName ?? "").toLowerCase().includes(term);
-
-    const u = !filters.urgency.length || filters.urgency.includes(x.urgency);
-    const s = !filters.status.length || filters.status.includes(x.status);
-    const df = !filters.dateFrom || new Date(x.eventDate) >= new Date(filters.dateFrom);
-    const dt = !filters.dateTo || new Date(x.eventDate) <= new Date(filters.dateTo);
-
-    return t && u && s && df && dt;
-  });
-
-  const dir = sortDir === "asc" ? 1 : -1;
-  const sorted = [...filtered].sort((a, b) => {
-    if (sortKey === "eventDate")
-      return (new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()) * dir;
-    if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
-    if (sortKey === "urgency") return a.urgency.localeCompare(b.urgency) * dir;
-    if (sortKey === "status") return a.status.localeCompare(b.status) * dir;
-    return 0;
-  });
-
-  const start = (page - 1) * pageSize;
-  await new Promise((r) => setTimeout(r, 250)); // tiny delay for UX
-  return { items: sorted.slice(start, start + pageSize), total: sorted.length };
+  const res = await fetch(`${HISTORY_ENDPOINT}?${query.toString()}`);
+  return handleResponse<VolunteerHistoryResponse>(res);
 }
 
 async function exportVolunteerHistoryCSV(params: VolunteerHistoryParams) {
-  console.info("Export CSV with params", params);
-  return Promise.resolve();
+  try {
+    const data = await fetchVolunteerHistory(params);
+    const rows = data.items.map((item) => [
+      item.volunteerName,
+      item.assignment,
+      item.eventDate,
+      item.status,
+      String(item.hours ?? ""),
+      item.location,
+    ]);
+    const header = ["Volunteer", "Assignment", "Event Date", "Status", "Hours", "Location"];
+    const csv = [header, ...rows]
+      .map((cols) => cols.map((col) => `"${col.replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "volunteer-history.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Failed to export volunteer history", error);
+    throw error;
+  }
 }
 
 const statusBadge = (s: ParticipationStatus) => {
@@ -220,10 +136,7 @@ const fmtDate = (iso: string) =>
     new Date(`${iso}T00:00:00Z`)
   );
 
-const fmtSkills = (a: string[]) => (a.length <= 3 ? a.join(", ") : `${a[0]}, ${a[1]}, ${a[2]} +${a.length - 3} more`);
-const cut = (t: string, n: number) => (t.length <= n ? t : `${t.slice(0, n - 1)}…`);
-
-/* ------------------------------- component ------------------------------ */
+// component
 export default function VolunteerHistory() {
   const [data, setData] = useState<VolunteerHistoryItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -235,12 +148,12 @@ export default function VolunteerHistory() {
     sortKey: DEFAULT_SORT_KEY,
     sortDir: DEFAULT_SORT_DIR,
     search: "",
-    filters: { urgency: [], status: [] },
+    filters: { status: [] },
   });
 
   const hasFilters = useMemo(() => {
     const f = params.filters;
-    return !!(params.search.trim() || f.urgency.length || f.status.length || f.dateFrom || f.dateTo);
+    return !!(params.search.trim() || f.status.length || f.dateFrom || f.dateTo);
   }, [params]);
 
   const totalPages = Math.max(1, Math.ceil(total / params.pageSize));
@@ -270,16 +183,16 @@ export default function VolunteerHistory() {
     v: VolunteerHistoryParams["filters"][K]
   ) => setParams((p) => ({ ...p, page: 1, filters: { ...p.filters, [k]: v } }));
 
-  const toggleFilter = (k: "urgency" | "status", v: string) =>
+  const toggleStatusFilter = (value: ParticipationStatus) =>
     setFilter(
-      k,
-      params.filters[k].includes(v)
-        ? params.filters[k].filter((x) => x !== v)
-        : [...params.filters[k], v]
+      "status",
+      params.filters.status.includes(value)
+        ? params.filters.status.filter((x) => x !== value)
+        : [...params.filters.status, value]
     );
 
   const clearFilters = () =>
-    setParams((p) => ({ ...p, page: 1, search: "", filters: { urgency: [], status: [] } }));
+    setParams((p) => ({ ...p, page: 1, search: "", filters: { status: [] } }));
 
   const onPage = (n: number) => set("page", Math.min(Math.max(1, n), totalPages));
   const onPageSize = (n: number) => setParams((p) => ({ ...p, pageSize: n, page: 1 }));
@@ -294,7 +207,7 @@ export default function VolunteerHistory() {
       <header className={`${CARD_CLASS} flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between`}>
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-bold">Volunteer History</h1>
-          <p className="text-base text-stone-500">Track individual volunteer assignments and participation details.</p>
+          <p className="text-base text-stone-500">Track volunteers.</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -346,27 +259,6 @@ export default function VolunteerHistory() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-semibold text-stone-700">Engagement Level</span>
-            <div className="flex flex-wrap gap-3">
-              {ENGAGEMENT_OPTIONS.map((opt) => {
-                const on = params.filters.urgency.includes(opt);
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => toggleFilter("urgency", opt)}
-                    className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      on ? "border-amber-500 bg-amber-500 text-white" : "border-amber-200 bg-white text-stone-600 hover:bg-amber-50"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
             <span className="text-sm font-semibold text-stone-700">Status</span>
             <div className="flex flex-wrap gap-3">
               {STATUS_OPTIONS.map((opt) => {
@@ -375,7 +267,7 @@ export default function VolunteerHistory() {
                   <button
                     key={opt}
                     type="button"
-                    onClick={() => toggleFilter("status", opt)}
+                    onClick={() => toggleStatusFilter(opt)}
                     className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
                       on ? "border-amber-500 bg-amber-500 text-white" : "border-amber-200 bg-white text-stone-600 hover:bg-amber-50"
                     }`}
@@ -434,8 +326,7 @@ export default function VolunteerHistory() {
                 </tr>
               )}
 
-              {!ui.loading &&
-                data.map((x) => {
+              {!ui.loading && data.map((x) => {
                   const badgeClass = statusBadge(x.status);
                   const isSel = x.id === ui.selectedId;
                   return (
@@ -445,13 +336,11 @@ export default function VolunteerHistory() {
                       className={`cursor-pointer transition ${isSel ? "bg-amber-100" : "hover:bg-amber-50"}`}
                     >
                       <td className="px-4 py-4 font-semibold text-stone-900">{x.volunteerName}</td>
-                      <td className="px-4 py-4 text-stone-600">{x.name}</td>
+                      <td className="px-4 py-4 text-stone-600">{x.assignment}</td>
                       <td className="px-4 py-4 text-stone-600">{fmtDate(x.eventDate)}</td>
                       <td className="px-4 py-4"><span className={badgeClass}>{x.status.replace("CheckedIn", "Checked In")}</span></td>
                       <td className="px-4 py-4 text-stone-600">{x.hours ?? "—"}</td>
-                      <td className="px-4 py-4 text-stone-600">{fmtSkills(x.requiredSkills)}</td>
                       <td className="px-4 py-4 text-stone-600">{x.location}</td>
-                      <td className="px-4 py-4 text-stone-600">{cut(x.description, 120)}</td>
                     </tr>
                   );
                 })}
@@ -493,6 +382,3 @@ export default function VolunteerHistory() {
     </div>
   );
 }
-
-
-
