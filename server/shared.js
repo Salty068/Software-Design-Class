@@ -1,3 +1,4 @@
+export const EVENT_TITLE_MAX_LENGTH = 80;
 export const EVENT_URGENCY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 export const PARTICIPATION_STATUSES = [
   "Registered",
@@ -31,6 +32,19 @@ export const ensureEventPayload = (payload = {}) => {
 
   if (!name || !description || !location || !eventDate || requiredSkills.length === 0) {
     throw new Error("Missing required fields.");
+  }
+  if (name.length > EVENT_TITLE_MAX_LENGTH) {
+    throw new Error(`Event name must be ≤ ${EVENT_TITLE_MAX_LENGTH} characters.`);
+  }
+
+  const eventDateValue = new Date(`${eventDate}T00:00:00`);
+  if (Number.isNaN(eventDateValue.getTime())) {
+    throw new Error("Invalid event date.");
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (eventDateValue < today) {
+    throw new Error("Event date cannot be in the past.");
   }
 
   return {
