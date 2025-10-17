@@ -5,66 +5,70 @@ import {
   ensureVolunteerPayload,
   generateId,
 } from "../shared.js";
-
-// replace later
-const eventsStore = [
-  {
-    id: "event1",
-    name: "event1",
-    description: "event1a.",
-    location: "houston",
-    requiredSkills: ["Teamwork", "Lifting"],
-    urgency: "Medium",
-    eventDate: "2025-10-01",
-  },
-];
+import { store } from "../store.memory.js";
 
 export const listEvents = () =>
-  eventsStore.map((event) => ({
-    ...event,
-    requiredSkills: [...event.requiredSkills],
-  }));
+  store.listEvents().map(e => ({ ...e, eventDate: e.date })); // expose eventDate to API clients
 
 export const createEvent = (payload) => {
-  const safePayload = ensureEventPayload(payload);
+  const safe = ensureEventPayload(payload);
   const event = {
     id: generateId("event"),
-    ...safePayload,
+    name: safe.name,
+    description: safe.description,
+    location: safe.location,
+    requiredSkills: safe.requiredSkills,
+    urgency: safe.urgency,
+    date: safe.eventDate,            // store expects `date`
   };
-  eventsStore.unshift(event);
-  return { ...event, requiredSkills: [...event.requiredSkills] };
+  store.upsertEvents([...store.listEvents(), event]);
+  return { ...event, eventDate: event.date };
 };
 
 export const updateEvent = (id, payload) => {
-  const safePayload = ensureEventPayload(payload);
-  const index = eventsStore.findIndex((event) => event.id === id);
-  if (index === -1) throw new Error(`Event with id "${id}" not found.`);
-  const updated = { id, ...safePayload };
-  eventsStore[index] = updated;
-  return { ...updated, requiredSkills: [...updated.requiredSkills] };
+  const safe = ensureEventPayload(payload);
+  const updated = (ev) =>
+    ev.id === id
+      ? {
+          ...ev,
+          name: safe.name,
+          description: safe.description,
+          location: safe.location,
+          requiredSkills: safe.requiredSkills,
+          urgency: safe.urgency,
+          date: safe.eventDate,
+        }
+      : ev;
+
+  const next = store.listEvents().map(updated);
+  const before = next.find(e => e.id === id);
+  if (!before) throw new Error(`Event with id "${id}" not found.`);
+  store.upsertEvents(next);
+  const out = next.find(e => e.id === id);
+  return { ...out, eventDate: out.date };
 };
 
 export const deleteEvent = (id) => {
-  const index = eventsStore.findIndex((event) => event.id === id);
-  if (index === -1) throw new Error(`Event with id "${id}" not found.`);
-  eventsStore.splice(index, 1);
+  const next = store.listEvents().filter(e => e.id !== id);
+  if (next.length === store.listEvents().length) throw new Error(`Event with id "${id}" not found.`);
+  store.upsertEvents(next);
 };
 
 export const resetEvents = (seed = []) => {
-  eventsStore.splice(
-    0,
-    eventsStore.length,
-    ...seed.map((event) => ({
-      ...event,
-      requiredSkills: Array.isArray(event.requiredSkills)
-        ? [...event.requiredSkills]
-        : [],
-    })),
-  );
+  const normalized = seed.map(e => ({
+    id: e.id ?? generateId("event"),
+    name: String(e.name ?? "").trim(),
+    description: String(e.description ?? "").trim(),
+    location: String(e.location ?? "").trim(),
+    requiredSkills: Array.isArray(e.requiredSkills) ? [...new Set(e.requiredSkills)] : [],
+    urgency: EVENT_URGENCY_OPTIONS.includes(e.urgency) ? e.urgency : "Low",
+    date: String(e.eventDate ?? e.date ?? "").trim(),    // accept either
+  }));
+  store.upsertEvents(normalized);
 };
 
+// ---- Volunteer history (kept local for now) ----
 const VOLUNTEER_NAMES = ["Jordan Smith", "Alex Johnson"];
-
 const defaultVolunteerEvent = {
   id: "event-default",
   name: "event1",
@@ -76,49 +80,36 @@ const defaultVolunteerEvent = {
 };
 
 const createVolunteerSeed = () => {
-  const sourceEvents = eventsStore.length > 0 ? eventsStore : [defaultVolunteerEvent];
-
-  return VOLUNTEER_NAMES.map((name, index) => {
-    const event = sourceEvents[index % sourceEvents.length];
+  const sourceEvents = listEvents().length ? listEvents() : [defaultVolunteerEvent];
+  return VOLUNTEER_NAMES.map((name, i) => {
+    const event = sourceEvents[i % sourceEvents.length];
     return {
-      id: `vol-history-seed-${index + 1}`,
-      volunteerId: `vol-${(index + 1).toString().padStart(3, "0")}`,
+      id: `vol-history-seed-${i + 1}`,
+      volunteerId: `vol-${String(i + 1).padStart(3, "0")}`,
       volunteerName: name,
       assignment: event.name,
       location: event.location,
       eventDate: event.eventDate,
-      status: PARTICIPATION_STATUSES[index % PARTICIPATION_STATUSES.length],
-      hours: 8 + (index % 5) * 4,
+      status: PARTICIPATION_STATUSES[i % PARTICIPATION_STATUSES.length],
+      hours: 8 + (i % 5) * 4,
     };
   });
 };
 
-// replace with database
 const volunteerHistoryStore = createVolunteerSeed();
+const clone = (x) => ({ ...x });
 
-const cloneVolunteerItem = (item) => ({
-  ...item,
-});
-
-export const listVolunteerHistory = () =>
-  volunteerHistoryStore.map(cloneVolunteerItem);
+export const listVolunteerHistory = () => volunteerHistoryStore.map(clone);
 
 export const addVolunteerHistory = (payload) => {
-  const safePayload = ensureVolunteerPayload(payload);
-  const entry = {
-    id: generateId("vol-history"),
-    ...safePayload,
-  };
+  const safe = ensureVolunteerPayload(payload);
+  const entry = { id: generateId("vol-history"), ...safe };
   volunteerHistoryStore.unshift(entry);
-  return cloneVolunteerItem(entry);
+  return clone(entry);
 };
 
 export { EVENT_URGENCY_OPTIONS, PARTICIPATION_STATUSES };
 
 export const resetVolunteerHistory = (seed = []) => {
-  volunteerHistoryStore.splice(
-    0,
-    volunteerHistoryStore.length,
-    ...seed.map(cloneVolunteerItem),
-  );
+  volunteerHistoryStore.splice(0, volunteerHistoryStore.length, ...seed.map(clone));
 };

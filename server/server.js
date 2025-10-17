@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import express from "express";
 import { fileURLToPath } from "url";
+import api from "./api/index.js";
 
 import { matching } from "./routes/matching.js";
 import { notifications } from "./routes/notifications.js";
@@ -19,20 +20,18 @@ export async function buildApp() {
   const app = express();
   app.use(express.json());
 
-  let apiRouter = null;
-
   // seed before routes
   store.upsertVolunteers(demoVols);
   store.upsertEvents(demoEvents);
 
-  // APIs
-  app.use("/api/match", matching);
-  app.use("/api/notifications", notifications);
+  // mount APIs
+  app.use("/api", api);                              // /api/events, /api/volunteer-history
+  app.use("/api/match", matching);                   // /api/match/...
+  app.use("/api/notifications", notifications);      // /api/notifications/...
 
-  // health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-  // Vite middleware only outside tests
+  // Vite middleware only in dev, not tests
   let vite = null;
   if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
     const { createServer: createViteServer } = await import("vite");
@@ -40,25 +39,9 @@ export async function buildApp() {
     app.use(vite.middlewares);
   }
 
-  try {
-    if (vite) {
-      const mod = await vite.ssrLoadModule("/server/api/index.js");
-      apiRouter = mod?.default ?? null;
-    } else {
-      const mod = await import("./api/index.js");
-      apiRouter = mod?.default ?? null;
-    }
-  } catch (error) {
-    console.warn("API router not mounted.", error);
-  }
-
-  if (apiRouter) {
-    app.use("/api", apiRouter);
-  }
-
   app.use(express.static(dist));
 
-  // serve index.html for non-API routes
+  // SPA fallback
   app.get(/^(?!\/api).*/, async (req, res, next) => {
     try {
       if (vite) {
@@ -75,13 +58,10 @@ export async function buildApp() {
     }
   });
 
-  // start reminder loop only when not testing
   if (process.env.NODE_ENV !== "test") startReminders();
-
   return app;
 }
 
-// start listener only when not testing
 if (process.env.NODE_ENV !== "test") {
   const app = await buildApp();
   const port = process.env.PORT || 3000;
