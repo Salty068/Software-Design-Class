@@ -1,9 +1,14 @@
-// we made this practically empty backend for future proofing
-
 import fs from "fs/promises";
 import path from "path";
 import express from "express";
 import { fileURLToPath } from "url";
+import { matching } from "./routes/matching.js";
+import { notifications } from "./routes/notifications.js";
+import { startReminders } from "./services/notifications.js";
+
+import { store } from "./store.memory.js";           
+import { demoVols, demoEvents } from "./demo_data/volunteer_events.data.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +18,10 @@ const dist = path.resolve(root, "dist");
 async function createServer() {
   const app = express();
   app.use(express.json());
+
+  app.use("/api/match", matching);
+  app.use("/api/notifications", notifications);
+  startReminders();
 
     //no use for this at the moment
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
@@ -43,6 +52,9 @@ async function createServer() {
       next(e);
     }
   });
+
+  store.upsertVolunteers(demoVols); //Example volunteer addition
+  store.upsertEvents(demoEvents); //Example event addition
 
   //if .env doesn't exist push on port 3000
   const port = process.env.PORT || 3000;
