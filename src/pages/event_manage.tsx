@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+const EVENT_TITLE_MAX_LENGTH = 80;
 const URGENCY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
 type EventUrgency = (typeof URGENCY_OPTIONS)[number];
 
@@ -86,6 +87,7 @@ const INPUT_CLASS =
 export default function EventManage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const todayISO = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   const emptyForm: Form = {
     name: "",
@@ -141,15 +143,22 @@ export default function EventManage() {
     }));
 
   const validate = (): string | null => {
-    if (!form.name.trim()) return "Event Name is required.";
-    if (form.name.trim().length > 100)
-      return "Event Name must be ≤ 100 characters.";
+    const trimmedName = form.name.trim();
+    if (!trimmedName) return "Event Name is required.";
+    if (trimmedName.length > EVENT_TITLE_MAX_LENGTH)
+      return `Event Name must be ≤ ${EVENT_TITLE_MAX_LENGTH} characters.`;
     if (!form.description.trim()) return "Event Description is required.";
     if (!form.location.trim()) return "Location is required.";
     if (form.requiredSkills.length === 0)
       return "Select at least one Required Skill.";
     if (!form.urgency) return "Urgency is required.";
     if (!form.eventDate) return "Event Date is required.";
+    const eventDateValue = new Date(`${form.eventDate}T00:00:00`);
+    if (Number.isNaN(eventDateValue.getTime()))
+      return "Invalid Event Date.";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (eventDateValue < today) return "Event Date cannot be in the past.";
     return null;
   };
 
@@ -158,10 +167,11 @@ export default function EventManage() {
     if (v) return setError(v);
     setSaving(true);
     try {
+      const trimmedName = form.name.trim();
       if (mode === "create") {
         const created = await createEvent({
           ...form,
-          name: form.name.trim(),
+          name: trimmedName,
           description: form.description.trim(),
           location: form.location.trim(),
         });
@@ -170,7 +180,7 @@ export default function EventManage() {
       } else if (selectedId) {
         const updated = await updateEvent(selectedId, {
           ...form,
-          name: form.name.trim(),
+          name: trimmedName,
           description: form.description.trim(),
           location: form.location.trim(),
         });
@@ -271,8 +281,8 @@ export default function EventManage() {
                 </span>
                 <input
                   type="text"
-                  maxLength={100}
-                  placeholder="Up to 100 characters"
+                  maxLength={EVENT_TITLE_MAX_LENGTH}
+                  placeholder={`Up to ${EVENT_TITLE_MAX_LENGTH} characters`}
                   value={form.name}
                   onChange={(e) => set("name", e.target.value)}
                   className={INPUT_CLASS}
@@ -285,6 +295,7 @@ export default function EventManage() {
                 </span>
                 <input
                   type="date"
+                  min={todayISO}
                   value={form.eventDate}
                   onChange={(e) => set("eventDate", e.target.value)}
                   className={INPUT_CLASS}
