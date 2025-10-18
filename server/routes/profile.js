@@ -331,7 +331,7 @@ profile.post("/:userId", (req, res) => {
 
   const newProfile = normalizeProfile(req.body, userId);
   profiles.set(userId, newProfile);
-  sync VolunteerFromProfile(newProfile);
+  syncVolunteerFromProfile(newProfile);
 
   res.status(201).json({ success: true, message: "Profile created successfully", data: newProfile });
 });
