@@ -14,27 +14,54 @@ type EventItem = {
 };
 type Form = Omit<EventItem, "id">;
 
+type ApiSuccess<T> = { data: T };
+type ApiError = { error: string };
+
+const EVENTS_ENDPOINT = "/api/events";
+
+const readJson = async <T,>(res: Response): Promise<T> => {
+  const text = await res.text();
+  return text ? (JSON.parse(text) as T) : ({} as T);
+};
+
+const handleResponse = async <T,>(res: Response): Promise<T> => {
+  const body = await readJson<ApiSuccess<T> | ApiError>(res);
+  if (!res.ok) {
+    const message = "error" in body && body.error ? body.error : "Request failed.";
+    throw new Error(message);
+  }
+  return "data" in body ? body.data : (undefined as T);
+};
+
 async function fetchEvents(): Promise<EventItem[]> {
-  return Promise.resolve([
-    {
-      id: "seed-1",
-      name: "Community Cleanup",
-      description: "Neighborhood cleanup and recycling drive.",
-      location: "123 Main St, Houston, TX",
-      requiredSkills: ["Teamwork", "Lifting"],
-      urgency: "Medium",
-      eventDate: "2025-10-01",
-    },
-  ]);
+  const res = await fetch(EVENTS_ENDPOINT);
+  return handleResponse<EventItem[]>(res);
 }
+
 async function createEvent(payload: Form): Promise<EventItem> {
-  return Promise.resolve({ id: crypto.randomUUID(), ...payload });
+  const res = await fetch(EVENTS_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<EventItem>(res);
 }
-async function updateEvent(id: string, payload: Form) {
-  return Promise.resolve({ id, ...payload });
+
+async function updateEvent(id: string, payload: Form): Promise<EventItem> {
+  const res = await fetch(`${EVENTS_ENDPOINT}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<EventItem>(res);
 }
-async function deleteEvent(_id: string) {
-  return Promise.resolve();
+
+async function deleteEvent(id: string): Promise<void> {
+  const res = await fetch(`${EVENTS_ENDPOINT}/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await readJson<ApiError>(res);
+    throw new Error(body.error ?? "Failed to delete event.");
+  }
 }
 
 const ALL_SKILLS = [

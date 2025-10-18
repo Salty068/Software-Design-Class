@@ -1,24 +1,39 @@
-// we made this practically empty backend for future proofing
-
 import fs from "fs/promises";
 import path from "path";
 import express from "express";
 import { fileURLToPath } from "url";
+import api from "./api/index.js";
+
+import { matching } from "./routes/matching.js";
+import { notifications } from "./routes/notifications.js";
+import { startReminders } from "./services/notifications.js";
+
+import { store } from "./store.memory.js";
+import { demoVols, demoEvents } from "./demo_data/volunteer_events.data.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..");
 const dist = path.resolve(root, "dist");
 
-async function createServer() {
+export async function buildApp() {
   const app = express();
   app.use(express.json());
 
-    //no use for this at the moment
+  // seed before routes
+  store.upsertVolunteers(demoVols);
+  store.upsertEvents(demoEvents);
+
+  // mount APIs
+  app.use("/api", api);                              // /api/events, /api/volunteer-history
+  app.use("/api/match", matching);                   // /api/match/...
+  app.use("/api/notifications", notifications);      // /api/notifications/...
+
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+  // Vite middleware only in dev, not tests
   let vite = null;
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({ server: { middlewareMode: true }, appType: "custom", root });
     app.use(vite.middlewares);
@@ -26,8 +41,7 @@ async function createServer() {
 
   app.use(express.static(dist));
 
-
-  //regex to match everything but the api to display pages
+  // SPA fallback
   app.get(/^(?!\/api).*/, async (req, res, next) => {
     try {
       if (vite) {
@@ -44,9 +58,12 @@ async function createServer() {
     }
   });
 
-  //if .env doesn't exist push on port 3000
+  if (process.env.NODE_ENV !== "test") startReminders();
+  return app;
+}
+
+if (process.env.NODE_ENV !== "test") {
+  const app = await buildApp();
   const port = process.env.PORT || 3000;
   app.listen(port, () => console.log(`http://localhost:${port}`));
 }
-
-createServer();

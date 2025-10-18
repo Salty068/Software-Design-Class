@@ -1,92 +1,128 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNotify, useServerNotifications } from "../components/NotificationProvider";
 
 type Volunteer = { id: string; name: string; location: string; skills: string[] };
 type EventItem = { id: string; name: string; location: string; requiredSkills: string[]; date: string; urgency: "Low"|"Medium"|"High" };
+type Ranked = { event: EventItem; score: number };
 
-const demoVols: Volunteer[] = [
-  { id: "v1", name: "Yusuf Y", location: "UH", skills: ["Tutoring", "Computer Science", "Math"] },
-  { id: "v2", name: "Sir Isaac Newton", location: "Midtown",  skills: ["Cooking", "Driving", "Logistics", "Baby Care"] },
-  { id: "v3", name: "Einstein Awesome", location: "Downtown", skills: ["Childcare","Teaching","CPR"] },
-];
-
-const demoEvents: EventItem[] = [
-  { id:"e1", name:"Food Bank Shift", location:"Midtown",  requiredSkills:["Cooking"], date:"2025-10-12", urgency:"Medium" },
-  { id:"e2", name:"After-School Tutor", location:"UH", requiredSkills:["Tutoring","Computer Science"], date:"2025-10-14", urgency:"Low" },
-  { id:"e3", name:"Marathon First-Aid", location:"Downtown", requiredSkills:["First Aid","CPR"], date:"2025-10-20", urgency:"High" },
-  { id:"e4", name:"Warehouse Logistics", location:"Downtown", requiredSkills:["Logistics"], date:"2025-10-09", urgency:"Medium" },
-];
-
-function matchEvents(v: Volunteer, all: EventItem[]) {
-  return all.filter(e => e.location === v.location && e.requiredSkills.every(s => v.skills.includes(s)));
-}
-
-function VolunteerMatchingDemo() {
-  const [volId, setVolId] = useState(demoVols[0].id);
-  const vol = useMemo(() => demoVols.find(v => v.id === volId)!, [volId]);
-  const matches = useMemo(() => matchEvents(vol, demoEvents), [vol]);
+export default function VolunteerMatchingDemo() {
+  const [vols, setVols] = useState<Volunteer[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [volId, setVolId] = useState<string>("");
+  const [ranked, setRanked] = useState<Ranked[]>([]);
   const [eventId, setEventId] = useState("");
+  const vol = useMemo(() => vols.find(v => v.id === volId), [volId, vols]);
+  const notify = useNotify();
 
-  useEffect(() => setEventId(matches[0]?.id ?? ""), [matches]);
+  useServerNotifications(volId || undefined);
+
+  // load volunteers + events once
+  useEffect(() => {
+    (async () => {
+      const [vRes, eRes] = await Promise.all([
+        fetch("/api/match/volunteers"),
+        fetch("/api/match/events"),
+      ]);
+      const vData: Volunteer[] = vRes.ok ? await vRes.json() : [];
+      const eData: EventItem[] = eRes.ok ? await eRes.json() : [];
+      setVols(vData);
+      setEvents(eData);
+      if (vData.length) setVolId(vData[0].id);
+    })();
+  }, []);
+
+  // fetch matches for scores and ordering
+  useEffect(() => {
+    if (!volId) return;
+    (async () => {
+      const res = await fetch(`/api/match/volunteer/${encodeURIComponent(volId)}?topN=9999`);
+      const data: Ranked[] = res.ok ? await res.json() : [];
+      setRanked(data);
+      // default to top scored if exists, otherwise first event
+      setEventId(data[0]?.event?.id ?? events[0]?.id ?? "");
+    })();
+  }, [volId, events]);
+
+  // quick lookup maps
+  const scoreById = useMemo(
+    () => new Map(ranked.map(r => [r.event.id, r.score])),
+    [ranked]
+  );
+  const rankedIds = useMemo(() => new Set(ranked.map(r => r.event.id)), [ranked]);
+  const rankedFirst = useMemo(() => {
+    const top = ranked.map(r => r.event.id);
+    const rest = events.filter(e => !rankedIds.has(e.id)).map(e => e.id);
+    return [...top, ...rest]; // ids ordered: matched first, then others
+  }, [ranked, events, rankedIds]);
+
+  const onAssign = async () => {
+    if (!eventId || !volId) return;
+    const res = await fetch("/api/match/assign", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ volunteerId: volId, eventId }),
+    });
+    if (!res.ok) { notify({ title: "Assignment failed", body: `HTTP ${res.status}`, type: "error" }); return; }
+   
+  };
 
   return (
-    <div className="
-        max-w-4x1 mx-auto p-6
-        space-y-8
-    ">
+    <div className="max-w-4x1 mx-auto p-6 space-y-8">
       <h1 className="text-2x1 font-bold">Volunteer Matching</h1>
 
       <div className="space-y-2">
         <label className="block">Volunteer</label>
-        <select value={volId} className="bg-white" onChange={e => setVolId(e.target.value)}>
-          {demoVols.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+        <select value={volId} className="bg-white" onChange={e => setVolId(e.target.value)} disabled={!vols.length}>
+          {vols.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
         </select>
-        <div >
-          <div >Location: {vol.location}</div>
-          <div >
-            {vol.skills.map(s => <span key={s}>{s}</span>)}
+        {vol && (
+          <div>
+            <div>Location: {vol.location}</div>
+            <div className="flex gap-2 flex-wrap">
+              {vol.skills.map(s => <span key={s} className="text-xs px-2 py-0.5 border rounded">{s}</span>)}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="space-y-2">
-        <label className="block">Matched Event:</label>
-        <select className="bg-white" value={eventId} onChange={e => setEventId(e.target.value)} disabled={!matches.length}>
-          {matches.length ? matches.map(e =>
-            <option key={e.id} value={e.id}>{e.name} • {e.location} • {e.urgency} • {e.date}</option>
-          ) : <option value="">No matches</option>}
+        <label className="block">Event:</label>
+        <select className="bg-white" value={eventId} onChange={e => setEventId(e.target.value)} disabled={!events.length}>
+          {rankedFirst.map(id => {
+            const e = events.find(x => x.id === id)!;
+            const sc = scoreById.get(id);
+            return (
+              <option key={id} value={id}>
+                {e.name} • {e.location} • {e.urgency} • {e.date}{typeof sc === "number" ? ` • score ${sc}` : " • not matched"}
+              </option>
+            );
+          })}
         </select>
       </div>
 
-      <div >
-        <button
-          disabled={!eventId}
-          onClick={() => {
-            const ev = demoEvents.find(e => e.id === eventId)!;
-            alert(`${vol.name} → ${ev.name} (${ev.date})`);
-          }}
-        >
-          Assign
-        </button>
-        <button onClick={() => setEventId("")}>Clear</button>
+      <div className="flex gap-3">
+        <button disabled={!eventId} onClick={onAssign} className="px-3 py-1 border rounded">Assign</button>
+        <button onClick={() => setEventId("")} className="px-3 py-1 border rounded">Clear</button>
       </div>
 
       <section>
-        <h2 >All Events</h2>
-        <div>
-          {demoEvents.map(e => {
-            const missing = e.requiredSkills.filter(s => !vol.skills.includes(s));
-            const ok = missing.length === 0 && e.location === vol.location;
+        <h2>All Events</h2>
+        <div className="grid gap-3">
+          {events.map(e => {
+            const sc = scoreById.get(e.id) ?? 0;
+            const missing = vol ? e.requiredSkills.filter(s => !vol.skills.includes(s)) : [];
+            const ok = vol ? missing.length === 0 && e.location === vol.location : false;
             return (
               <div key={e.id} className={`border rounded-lg p-3 ${ok ? "border-green-400" : "border-gray-200"}`}>
-                <div>{e.name}</div>
-                <div>{e.location} • {e.urgency} • {e.date}</div>
-                <div>
-                  {e.requiredSkills.map(s => <span key={s}>{s}</span>)}
+                <div className="font-medium">{e.name}</div>
+                <div>{e.location} • {e.urgency} • {e.date} • score {sc}</div>
+                <div className="flex gap-2 flex-wrap">
+                  {e.requiredSkills.map(s => <span key={s} className="text-xs px-2 py-0.5 border rounded">{s}</span>)}
                 </div>
-                {!ok && (
-                  <div>
-                    {e.location !== vol.location && <span>Location mismatch</span>}
-                    {missing.length > 0 && <span>Missing skills: {missing.join(", ")}</span>}
+                {!ok && vol && (
+                  <div className="text-xs mt-1 opacity-70">
+                    {e.location !== vol.location && <span>Location mismatch. </span>}
+                    {missing.length > 0 && <span>Missing: {missing.join(", ")}</span>}
                   </div>
                 )}
               </div>
@@ -97,5 +133,3 @@ function VolunteerMatchingDemo() {
     </div>
   );
 }
-
-export default VolunteerMatchingDemo

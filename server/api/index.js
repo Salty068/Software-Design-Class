@@ -1,0 +1,163 @@
+import { Router } from "express";
+import {
+  addVolunteerHistory,
+  createEvent,
+  deleteEvent,
+  listEvents,
+  listVolunteerHistory,
+  resetEvents,
+  resetVolunteerHistory,
+  updateEvent,
+} from "./test.js";
+
+const router = Router();
+
+const handleSuccess = (res, data, status = 200) => {
+  res.status(status).json({ data });
+};
+
+const handleError = (res, error) => {
+  if (error instanceof Error) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.status(500).json({ error: "Unexpected server error." });
+};
+
+router.get("/events", (_req, res) => {
+  try {
+    const events = listEvents();
+    handleSuccess(res, events);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+router.post("/events", (req, res) => {
+  try {
+    const event = createEvent(req.body);
+    handleSuccess(res, event, 201);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+router.put("/events/:id", (req, res) => {
+  try {
+    const event = updateEvent(req.params.id, req.body);
+    handleSuccess(res, event);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+router.delete("/events/:id", (req, res) => {
+  try {
+    deleteEvent(req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+router.post("/events/reset", (req, res) => {
+  try {
+    const seed = Array.isArray(req.body) ? req.body : [];
+    resetEvents(seed);
+    res.status(204).end();
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+router.get("/volunteer-history", (req, res) => {
+  try {
+    const {
+      page = "1",
+      pageSize = "10",
+      sortKey = "eventDate",
+      sortDir = "desc",
+      search = "",
+      status = "",
+      dateFrom = "",
+      dateTo = "",
+    } = req.query;
+
+    const all = listVolunteerHistory();
+    const term = String(search).trim().toLowerCase();
+    const statusFilters = String(status)
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const dateFromValue = dateFrom ? new Date(String(dateFrom)) : null;
+    const dateToValue = dateTo ? new Date(String(dateTo)) : null;
+
+    const filtered = all.filter((item) => {
+      const matchesSearch =
+        !term ||
+        item.volunteerName.toLowerCase().includes(term) ||
+        item.assignment.toLowerCase().includes(term) ||
+        item.location.toLowerCase().includes(term);
+
+      const matchesStatus =
+        statusFilters.length === 0 || statusFilters.includes(item.status);
+
+      const eventDate = new Date(item.eventDate);
+      const matchesDateFrom = !dateFromValue || eventDate >= dateFromValue;
+      const matchesDateTo = !dateToValue || eventDate <= dateToValue;
+
+      return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo;
+    });
+
+    const dir = String(sortDir).toLowerCase() === "asc" ? 1 : -1;
+    const key = String(sortKey);
+
+    const sorted = [...filtered].sort((a, b) => {
+      if (key === "eventDate") {
+        return (new Date(a.eventDate) - new Date(b.eventDate)) * dir;
+      }
+      if (key === "volunteerName") {
+        return a.volunteerName.localeCompare(b.volunteerName) * dir;
+      }
+      if (key === "assignment") {
+        return a.assignment.localeCompare(b.assignment) * dir;
+      }
+      if (key === "status") {
+        return a.status.localeCompare(b.status) * dir;
+      }
+      return 0;
+    });
+
+    const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+    const pageSizeNumber = Math.max(1, Math.min(parseInt(pageSize, 10) || 10, 100));
+    const start = (pageNumber - 1) * pageSizeNumber;
+
+    const items = sorted.slice(start, start + pageSizeNumber);
+    const total = filtered.length;
+
+    handleSuccess(res, { items, total });
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+router.post("/volunteer-history", (req, res) => {
+  try {
+    const history = addVolunteerHistory(req.body);
+    handleSuccess(res, history, 201);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+router.post("/volunteer-history/reset", (req, res) => {
+  try {
+    const seed = Array.isArray(req.body) ? req.body : [];
+    resetVolunteerHistory(seed);
+    res.status(204).end();
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+export default router;
