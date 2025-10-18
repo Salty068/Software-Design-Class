@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { toUniqueSkills } from "../shared.js";
 import { store } from "../store.memory.js";
+export const profiles = new Map();
 
 export const VALIDATION_RULES = {
   fullName: { minLength: 1, maxLength: 50 },
@@ -279,6 +280,8 @@ function syncVolunteerFromProfile(profileRecord) {
   ]);
 }
 
+    
+
 function ensureUserId(res, userId) {
   if (!userId || userId.trim().length === 0) {
     res.status(400).json({
@@ -294,7 +297,7 @@ function ensureUserId(res, userId) {
 export const profile = Router();
 
 profile.get("/", (_req, res) => {
-  const allProfiles = store.listProfiles();
+  const allProfiles = Array.from(profiles.values());
   res.status(200).json({ success: true, count: allProfiles.length, data: allProfiles });
 });
 
@@ -302,7 +305,7 @@ profile.get("/:userId", (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
-  const profileData = store.getProfile(userId);
+  const profileData = profiles.get(userId);
   if (!profileData) {
     res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
     return;
@@ -315,7 +318,7 @@ profile.post("/:userId", (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
-  if (store.getProfile(userId)) {
+  if (profiles.has(userId)) {
     res.status(409).json({ success: false, message: `Profile already exists for user ID: ${userId}` });
     return;
   }
@@ -327,8 +330,8 @@ profile.post("/:userId", (req, res) => {
   }
 
   const newProfile = normalizeProfile(req.body, userId);
-  store.saveProfile(newProfile);
-  syncVolunteerFromProfile(newProfile);
+  profiles.set(userId, newProfile);
+  sync VolunteerFromProfile(newProfile);
 
   res.status(201).json({ success: true, message: "Profile created successfully", data: newProfile });
 });
@@ -337,7 +340,7 @@ profile.put("/:userId", (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
-  const existingProfile = store.getProfile(userId);
+  const existingProfile = profiles.get(userId);
   if (!existingProfile) {
     res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
     return;
@@ -468,14 +471,14 @@ profile.put("/:userId", (req, res) => {
         zipCode: updateData.location.zipCode.trim(),
       },
     }),
-    ...(updateData.skills && { skills: dedupe(updateData.skills.map((skill) => skill.trim())) }),
+    ...(updateData.skills && { skills: updateData.skills.map((skill) => skill.trim()) }),
     ...(updateData.preferences !== undefined && {
       preferences: updateData.preferences ? updateData.preferences.trim() : undefined,
     }),
-    ...(updateData.availability && { availability: dedupe(updateData.availability.map((day) => day.trim())) }),
+    ...(updateData.availability && { availability: updateData.availability.map((day) => day.trim()) }),
   };
 
-  store.saveProfile(normalized);
+  profiles.set(userId, normalized);
   syncVolunteerFromProfile(normalized);
 
   res.status(200).json({ success: true, message: "Profile updated successfully", data: normalized });
@@ -485,13 +488,12 @@ profile.delete("/:userId", (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
-  if (!store.getProfile(userId)) {
+  if (!profiles.has(userId)) {
     res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
     return;
   }
 
-  store.deleteProfile(userId);
-  store.removeVolunteer(userId);
+  profiles.delete(userId);
   res.status(200).json({ success: true, message: "Profile deleted successfully" });
 });
 
