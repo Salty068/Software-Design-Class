@@ -9,6 +9,7 @@ import {
   validateStringLength,
   validateZipCode,
 } from "../profile.js";
+import { store } from "../../store.memory.js";
 
 let app;
 
@@ -207,5 +208,29 @@ describe("Profile API", () => {
 
     const getRes = await request(app).get(`/api/profile/${userId}`);
     expect(getRes.status).toBe(404);
+  });
+
+  it("syncs profiles with the volunteer store", async () => {
+    await request(app).post(`/api/profile/${userId}`).send(baseProfile);
+
+    let volunteer = store.getVolunteer(userId);
+    expect(volunteer).toBeTruthy();
+    expect(volunteer?.name).toBe("John Doe");
+    expect(volunteer?.skills).toContain("JavaScript");
+    expect(volunteer?.location).toBe("Houston, TX");
+
+    const updatePayload = {
+      ...baseProfile,
+      fullName: "Jane Doe",
+      skills: ["JavaScript", "Leadership"],
+    };
+
+    const updateRes = await request(app).put(`/api/profile/${userId}`).send(updatePayload);
+    expect(updateRes.status).toBe(200);
+
+    volunteer = store.getVolunteer(userId);
+    expect(volunteer).toBeTruthy();
+    expect(volunteer?.name).toBe("Jane Doe");
+    expect(volunteer?.skills).toContain("Leadership");
   });
 });

@@ -1,5 +1,7 @@
 import { Router } from "express";
 
+import { toUniqueSkills } from "../shared.js";
+import { store } from "../store.memory.js";
 export const profiles = new Map();
 
 export const VALIDATION_RULES = {
@@ -239,7 +241,15 @@ export function validateProfileData(profileData) {
 }
 
 export function clearAllProfiles() {
-  profiles.clear();
+  const existingProfiles = store.listProfiles();
+  existingProfiles.forEach((profileRecord) => {
+    store.removeVolunteer(profileRecord.userId);
+  });
+  store.clearProfiles();
+}
+
+function dedupe(values = []) {
+  return Array.from(new Set(values));
 }
 
 function normalizeProfile(payload, userId) {
@@ -253,11 +263,24 @@ function normalizeProfile(payload, userId) {
       state: payload.location.state.trim().toUpperCase(),
       zipCode: payload.location.zipCode.trim(),
     },
-    skills: payload.skills.map((skill) => skill.trim()),
+    skills: dedupe(payload.skills.map((skill) => skill.trim())),
     preferences: payload.preferences ? payload.preferences.trim() : undefined,
-    availability: payload.availability.map((day) => day.trim()),
+    availability: dedupe(payload.availability.map((day) => day.trim())),
   };
 }
+
+function syncVolunteerFromProfile(profileRecord) {
+  store.upsertVolunteers([
+    {
+      id: profileRecord.userId,
+      name: profileRecord.fullName,
+      location: `${profileRecord.location.city}, ${profileRecord.location.state}`,
+      skills: toUniqueSkills(profileRecord.skills),
+    },
+  ]);
+}
+
+    
 
 function ensureUserId(res, userId) {
   if (!userId || userId.trim().length === 0) {
@@ -308,6 +331,7 @@ profile.post("/:userId", (req, res) => {
 
   const newProfile = normalizeProfile(req.body, userId);
   profiles.set(userId, newProfile);
+  syncVolunteerFromProfile(newProfile);
 
   res.status(201).json({ success: true, message: "Profile created successfully", data: newProfile });
 });
@@ -455,6 +479,7 @@ profile.put("/:userId", (req, res) => {
   };
 
   profiles.set(userId, normalized);
+  syncVolunteerFromProfile(normalized);
 
   res.status(200).json({ success: true, message: "Profile updated successfully", data: normalized });
 });
