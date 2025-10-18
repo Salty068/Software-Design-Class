@@ -8,7 +8,11 @@ import {
 import { store } from "../store.memory.js";
 
 export const listEvents = () =>
-  store.listEvents().map(e => ({ ...e, eventDate: e.date })); // expose eventDate to API clients
+  store.listEvents().map(e => ({
+    ...e,
+    requiredSkills: [...e.requiredSkills],
+    eventDate: e.date,
+  }));
 
 export const createEvent = (payload) => {
   const safe = ensureEventPayload(payload);
@@ -17,13 +21,18 @@ export const createEvent = (payload) => {
     name: safe.name,
     description: safe.description,
     location: safe.location,
-    requiredSkills: safe.requiredSkills,
+    requiredSkills: [...safe.requiredSkills], 
     urgency: safe.urgency,
-    date: safe.eventDate,            // store expects `date`
+    date: safe.eventDate,
   };
   store.upsertEvents([...store.listEvents(), event]);
-  return { ...event, eventDate: event.date };
+  return {
+    ...event,
+    requiredSkills: [...event.requiredSkills],
+    eventDate: event.date,
+  };
 };
+
 
 export const updateEvent = (id, payload) => {
   const safe = ensureEventPayload(payload);
@@ -34,7 +43,7 @@ export const updateEvent = (id, payload) => {
           name: safe.name,
           description: safe.description,
           location: safe.location,
-          requiredSkills: safe.requiredSkills,
+          requiredSkills: [...safe.requiredSkills],
           urgency: safe.urgency,
           date: safe.eventDate,
         }
@@ -45,8 +54,13 @@ export const updateEvent = (id, payload) => {
   if (!before) throw new Error(`Event with id "${id}" not found.`);
   store.upsertEvents(next);
   const out = next.find(e => e.id === id);
-  return { ...out, eventDate: out.date };
+  return {
+    ...out,
+    requiredSkills: [...out.requiredSkills],
+    eventDate: out.date,
+  };
 };
+
 
 export const deleteEvent = (id) => {
   const next = store.listEvents().filter(e => e.id !== id);

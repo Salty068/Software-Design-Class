@@ -1,3 +1,4 @@
+// server/shared.js
 export const EVENT_TITLE_MAX_LENGTH = 80;
 export const EVENT_URGENCY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 export const PARTICIPATION_STATUSES = [
@@ -17,7 +18,14 @@ export const generateId = (prefix) => {
 };
 
 export const toUniqueSkills = (skills = []) =>
-  [...new Set(skills.map((skill) => String(skill).trim()).filter(Boolean))];
+  [...new Set(skills.map((s) => String(s).trim()).filter(Boolean))];
+
+const isValidISODate = (s) => Number.isFinite(new Date(String(s)).getTime());
+const toMidnight = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
 
 export const ensureEventPayload = (payload = {}) => {
   if (typeof payload !== "object" || payload === null) {
@@ -28,7 +36,10 @@ export const ensureEventPayload = (payload = {}) => {
   const description = String(payload.description ?? "").trim();
   const location = String(payload.location ?? "").trim();
   const eventDate = String(payload.eventDate ?? "").trim();
-  const requiredSkills = Array.isArray(payload.requiredSkills) ? payload.requiredSkills : [];
+  const requiredSkills = Array.isArray(payload.requiredSkills)
+    ? payload.requiredSkills
+    : [];
+  const urgency = String(payload.urgency ?? "Low").trim();
 
   if (!name || !description || !location || !eventDate || requiredSkills.length === 0) {
     throw new Error("Missing required fields.");
@@ -37,14 +48,19 @@ export const ensureEventPayload = (payload = {}) => {
     throw new Error(`Event name must be ≤ ${EVENT_TITLE_MAX_LENGTH} characters.`);
   }
 
-  const eventDateValue = new Date(`${eventDate}T00:00:00`);
-  if (Number.isNaN(eventDateValue.getTime())) {
+  if (!isValidISODate(eventDate)) {
     throw new Error("Invalid event date.");
   }
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (eventDateValue < today) {
+
+  const dEvent = toMidnight(new Date(eventDate));
+  const dToday = toMidnight(new Date());
+
+  if (dEvent < dToday) {
     throw new Error("Event date cannot be in the past.");
+  }
+
+  if (!EVENT_URGENCY_OPTIONS.includes(urgency)) {
+    throw new Error(`Invalid urgency: ${urgency}`);
   }
 
   return {
@@ -52,7 +68,7 @@ export const ensureEventPayload = (payload = {}) => {
     description,
     location,
     requiredSkills: toUniqueSkills(requiredSkills),
-    urgency: payload.urgency ?? "Low",
+    urgency,
     eventDate,
   };
 };
@@ -70,7 +86,8 @@ export const ensureVolunteerPayload = (payload = {}) => {
   const location = String(payload.location ?? "").trim();
   const eventDate = String(payload.eventDate ?? "").trim();
   const status = String(payload.status ?? "");
-  const volunteerId = (payload.volunteerId ? String(payload.volunteerId) : "").trim() || generateId("vol");
+  const volunteerId =
+    (payload.volunteerId ? String(payload.volunteerId) : "").trim() || generateId("vol");
   const hoursValue = Number(payload.hours);
 
   if (!volunteerName || !assignment || !location || !eventDate) {
@@ -81,7 +98,9 @@ export const ensureVolunteerPayload = (payload = {}) => {
     throw new Error(`Invalid participation status: ${status}`);
   }
 
-  const hours = Number.isFinite(hoursValue) ? Math.max(0, Math.round(hoursValue)) : 0;
+  const hours = Number.isFinite(hoursValue)
+    ? Math.max(0, Math.round(hoursValue))
+    : 0;
 
   return {
     volunteerId,
