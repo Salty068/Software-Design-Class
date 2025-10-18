@@ -6,6 +6,7 @@ import api from "./api/index.js";
 
 import { matching } from "./routes/matching.js";
 import { notifications } from "./routes/notifications.js";
+import { profile } from "./routes/profile.js";
 import { startReminders } from "./services/notifications.js";
 
 import { store } from "./store.memory.js";
@@ -28,6 +29,7 @@ export async function buildApp() {
   app.use("/api", api);                              // /api/events, /api/volunteer-history
   app.use("/api/match", matching);                   // /api/match/...
   app.use("/api/notifications", notifications);      // /api/notifications/...
+  app.use("/api/profile", profile);                  // /api/profile/...
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
