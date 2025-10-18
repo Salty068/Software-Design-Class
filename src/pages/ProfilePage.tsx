@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { getProfile, createProfile, updateProfile } from '../services/profileApi';
-import type { ProfileData } from '../services/profileApi';
+import { getProfile, createProfile, updateProfile } from "../services/profile.api";
+import type { ProfileData } from "../services/profile.api";
 
 export default function ProfilePage() {
   const userId = 'user123';
