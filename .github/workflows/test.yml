@@ -18,14 +18,15 @@ jobs:
           MYSQL_USER: prisma
           MYSQL_PASSWORD: prisma
           MYSQL_ROOT_PASSWORD: root
-        ports: ["3306:33066"]
+        ports: 
+          - "3306:3066"
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=12
     env:
-      DATABSE_URL: mysql://prisma:prisma@127.0.0.1:3306/app
+      DATABASE_URL: mysql://prisma:prisma@127.0.0.1:3306/app
 
     steps:
       - name: Checkout repository
