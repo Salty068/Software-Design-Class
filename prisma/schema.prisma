@@ -10,6 +10,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum NoticeType {
+  info
+  success
+  warn
+  error
+}
+
 model UserCredentials {
   id        String   @id @default(uuid())
   userId    String   @unique @db.VarChar(100)
@@ -37,8 +44,10 @@ model UserProfile {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  credentials       UserCredentials?     @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  volunteerHistory  VolunteerHistory[]
+  credentials      UserCredentials?   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  volunteerHistory VolunteerHistory[]
+  Assignment       Assignment[]
+  Notice           Notice[]
 
   @@map("user_profiles")
 }
@@ -64,22 +73,51 @@ model EventDetails {
   updatedAt      DateTime @updatedAt
 
   volunteerHistory VolunteerHistory[]
+  Assignment       Assignment[]
 
   @@map("event_details")
 }
 
 model VolunteerHistory {
-  id                 String   @id @default(uuid())
-  userId             String   @db.VarChar(100)
-  eventId            String
-  participationStatus String  @db.VarChar(50)
-  hoursVolunteered   Float?
-  feedback           String?  @db.Text
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  userId              String   @db.VarChar(100)
+  eventId             String
+  participationStatus String   @db.VarChar(50)
+  hoursVolunteered    Float?
+  feedback            String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   profile UserProfile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
   event   EventDetails @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@map("volunteer_history")
+}
+
+model Assignment {
+  id          String @id @default(uuid())
+  volunteerId String @db.VarChar(100)
+  eventId     String
+  createdAtMs BigInt @default(dbgenerated("(UNIX_TIMESTAMP() * 1000)")) @db.BigInt
+
+  volunteer UserProfile  @relation(fields: [volunteerId], references: [userId], onDelete: Cascade)
+  event     EventDetails @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([volunteerId])
+  @@index([eventId])
+  @@map("assignments")
+}
+
+model Notice {
+  id          String     @id @default(uuid())
+  volunteerId String     @db.VarChar(100)
+  title       String     @db.VarChar(200)
+  body        String?    @db.Text
+  type        NoticeType @default(info)
+  createdAtMs BigInt     @default(dbgenerated("(UNIX_TIMESTAMP() * 1000)")) @db.BigInt
+
+  volunteer UserProfile @relation(fields: [volunteerId], references: [userId], onDelete: Cascade)
+
+  @@index([volunteerId])
+  @@map("notices")
 }
