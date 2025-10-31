@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import request from "supertest";
 import { buildApp } from "../../server.js";
-import { resetEvents, EVENT_URGENCY_OPTIONS } from "../../api/test.js";
+import { resetEvents, EVENT_URGENCY_OPTIONS } from "../../api/events.prisma.js";
 import { EVENT_TITLE_MAX_LENGTH } from "../../shared.js";
 
 const isoDate = (daysFromToday = 0) =>
@@ -15,8 +15,8 @@ beforeAll(async () => {
   app = await buildApp();
 });
 
-beforeEach(() => {
-  resetEvents([]);
+beforeEach(async () => {
+  await resetEvents([]);
 });
 
 describe("Events API", () => {

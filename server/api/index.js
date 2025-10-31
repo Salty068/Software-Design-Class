@@ -1,14 +1,16 @@
 import { Router } from "express";
 import {
-  addVolunteerHistory,
   createEvent,
   deleteEvent,
   listEvents,
-  listVolunteerHistory,
   resetEvents,
-  resetVolunteerHistory,
   updateEvent,
-} from "./test.js";
+} from "./events.prisma.js";
+import {
+  addVolunteerHistory,
+  listVolunteerHistory,
+  resetVolunteerHistory,
+} from "./volunteerHistory.prisma.js";
 
 const router = Router();
 
@@ -23,53 +25,53 @@ const handleError = (res, error) => {
   return res.status(500).json({ error: "Unexpected server error." });
 };
 
-router.get("/events", (_req, res) => {
+router.get("/events", async (_req, res) => {
   try {
-    const events = listEvents();
+    const events = await listEvents();
     handleSuccess(res, events);
   } catch (error) {
     handleError(res, error);
   }
 });
 
-router.post("/events", (req, res) => {
+router.post("/events", async (req, res) => {
   try {
-    const event = createEvent(req.body);
+    const event = await createEvent(req.body);
     handleSuccess(res, event, 201);
   } catch (error) {
     handleError(res, error);
   }
 });
 
-router.put("/events/:id", (req, res) => {
+router.put("/events/:id", async (req, res) => {
   try {
-    const event = updateEvent(req.params.id, req.body);
+    const event = await updateEvent(req.params.id, req.body);
     handleSuccess(res, event);
   } catch (error) {
     handleError(res, error);
   }
 });
 
-router.delete("/events/:id", (req, res) => {
+router.delete("/events/:id", async (req, res) => {
   try {
-    deleteEvent(req.params.id);
+    await deleteEvent(req.params.id);
     res.status(204).end();
   } catch (error) {
     handleError(res, error);
   }
 });
 
-router.post("/events/reset", (req, res) => {
+router.post("/events/reset", async (req, res) => {
   try {
     const seed = Array.isArray(req.body) ? req.body : [];
-    resetEvents(seed);
+    await resetEvents(seed);
     res.status(204).end();
   } catch (error) {
     handleError(res, error);
   }
 });
 
-router.get("/volunteer-history", (req, res) => {
+router.get("/volunteer-history", async (req, res) => {
   try {
     const {
       page = "1",
@@ -82,7 +84,7 @@ router.get("/volunteer-history", (req, res) => {
       dateTo = "",
     } = req.query;
 
-    const all = listVolunteerHistory();
+    const all = await listVolunteerHistory();
     const term = String(search).trim().toLowerCase();
     const statusFilters = String(status)
       .split(",")
@@ -141,19 +143,19 @@ router.get("/volunteer-history", (req, res) => {
   }
 });
 
-router.post("/volunteer-history", (req, res) => {
+router.post("/volunteer-history", async (req, res) => {
   try {
-    const history = addVolunteerHistory(req.body);
+    const history = await addVolunteerHistory(req.body);
     handleSuccess(res, history, 201);
   } catch (error) {
     handleError(res, error);
   }
 });
 
-router.post("/volunteer-history/reset", (req, res) => {
+router.post("/volunteer-history/reset", async (req, res) => {
   try {
     const seed = Array.isArray(req.body) ? req.body : [];
-    resetVolunteerHistory(seed);
+    await resetVolunteerHistory(seed);
     res.status(204).end();
   } catch (error) {
     handleError(res, error);

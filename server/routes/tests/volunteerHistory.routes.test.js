@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import request from "supertest";
 import { buildApp } from "../../server.js";
-import { resetVolunteerHistory, PARTICIPATION_STATUSES } from "../../api/test.js";
+import { resetVolunteerHistory, PARTICIPATION_STATUSES } from "../../api/volunteerHistory.prisma.js";
 
 let app;
 const isoDate = (daysFromToday = 0) =>
@@ -14,8 +14,8 @@ beforeAll(async () => {
   app = await buildApp();
 });
 
-beforeEach(() => {
-  resetVolunteerHistory([]);
+beforeEach(async () => {
+  await resetVolunteerHistory([]);
 });
 
 describe("Volunteer History API", () => {
@@ -51,7 +51,7 @@ describe("Volunteer History API", () => {
   });
 
   it("GET /api/volunteer-history applies status filter", async () => {
-    resetVolunteerHistory([
+    await resetVolunteerHistory([
       {
         id: "vh-1",
         volunteerId: "vol-1",
