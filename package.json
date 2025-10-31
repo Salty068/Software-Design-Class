@@ -9,11 +9,20 @@
     "start": "cross-env NODE_ENV=production node server/server.js",
     "test": "cross-env NODE_ENV=test vitest --run",
     "test:watch": "cross-env NODE_ENV=test vitest",
-    "coverage": "cross-env NODE_ENV=test vitest run --coverage"
+    "coverage": "cross-env NODE_ENV=test vitest run --coverage",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "node prisma/seed.js",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push",
+    "db:reset": "prisma migrate reset"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@prisma/client": "^6.18.0",
     "@types/react-datepicker": "^4.19.6",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
@@ -28,6 +37,7 @@
   "devDependencies": {
     "@eslint/js": "^9.36.0",
     "@tailwindcss/vite": "^4.1.13",
+    "@types/bcrypt": "^6.0.0",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.3",
@@ -40,6 +50,7 @@
     "globals": "^16.4.0",
     "nodemon": "^3.1.10",
     "postcss": "^8.5.6",
+    "prisma": "^6.18.0",
     "supertest": "^7.1.4",
     "tailwindcss": "^4.1.13",
     "typescript": "~5.8.3",

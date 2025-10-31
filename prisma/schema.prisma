@@ -1,0 +1,85 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model UserCredentials {
+  id        String   @id @default(uuid())
+  userId    String   @unique @db.VarChar(100)
+  password  String   @db.VarChar(255)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile UserProfile?
+
+  @@map("user_credentials")
+}
+
+model UserProfile {
+  id           String   @id @default(uuid())
+  userId       String   @unique @db.VarChar(100)
+  fullName     String   @db.VarChar(50)
+  address1     String   @db.VarChar(100)
+  address2     String?  @db.VarChar(100)
+  city         String   @db.VarChar(100)
+  state        String   @db.Char(2)
+  zipCode      String   @db.VarChar(10)
+  skills       Json
+  preferences  String?  @db.VarChar(500)
+  availability Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  credentials       UserCredentials?     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  volunteerHistory  VolunteerHistory[]
+
+  @@map("user_profiles")
+}
+
+model States {
+  id        Int      @id @default(autoincrement())
+  stateCode String   @unique @db.Char(2)
+  stateName String   @db.VarChar(100)
+  createdAt DateTime @default(now())
+
+  @@map("states")
+}
+
+model EventDetails {
+  id             String   @id @default(uuid())
+  eventName      String   @db.VarChar(100)
+  description    String   @db.Text
+  location       String   @db.VarChar(200)
+  requiredSkills Json
+  urgency        String   @db.VarChar(20)
+  eventDate      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  volunteerHistory VolunteerHistory[]
+
+  @@map("event_details")
+}
+
+model VolunteerHistory {
+  id                 String   @id @default(uuid())
+  userId             String   @db.VarChar(100)
+  eventId            String
+  participationStatus String  @db.VarChar(50)
+  hoursVolunteered   Float?
+  feedback           String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  profile UserProfile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  event   EventDetails @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("volunteer_history")
+}

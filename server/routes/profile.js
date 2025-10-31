@@ -2,6 +2,8 @@ import { Router } from "express";
 
 import { toUniqueSkills } from "../shared.js";
 import { store } from "../store.memory.js";
+import prisma from "../db.js";
+
 export const profiles = new Map();
 
 export const VALIDATION_RULES = {
@@ -296,205 +298,336 @@ function ensureUserId(res, userId) {
 
 export const profile = Router();
 
-profile.get("/", (_req, res) => {
-  const allProfiles = Array.from(profiles.values());
-  res.status(200).json({ success: true, count: allProfiles.length, data: allProfiles });
+profile.get("/", async (_req, res) => {
+  try {
+    const allProfiles = await prisma.userProfile.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    const formattedProfiles = allProfiles.map(profile => ({
+      userId: profile.userId,
+      fullName: profile.fullName,
+      location: {
+        address1: profile.address1,
+        address2: profile.address2,
+        city: profile.city,
+        state: profile.state,
+        zipCode: profile.zipCode,
+      },
+      skills: profile.skills,
+      preferences: profile.preferences,
+      availability: profile.availability,
+    }));
+
+    res.status(200).json({ success: true, count: formattedProfiles.length, data: formattedProfiles });
+  } catch (error) {
+    console.error('Error fetching profiles:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch profiles', errors: [error.message] });
+  }
 });
 
-profile.get("/:userId", (req, res) => {
+profile.get("/:userId", async (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
-  const profileData = profiles.get(userId);
-  if (!profileData) {
-    res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
-    return;
-  }
+  try {
+    const profileData = await prisma.userProfile.findUnique({
+      where: { userId }
+    });
 
-  res.status(200).json({ success: true, data: profileData });
-});
-
-profile.post("/:userId", (req, res) => {
-  const { userId } = req.params;
-  if (!ensureUserId(res, userId)) return;
-
-  if (profiles.has(userId)) {
-    res.status(409).json({ success: false, message: `Profile already exists for user ID: ${userId}` });
-    return;
-  }
-
-  const validation = validateProfileData(req.body);
-  if (!validation.isValid) {
-    res.status(400).json({ success: false, message: "Validation failed", errors: validation.errors });
-    return;
-  }
-
-  const newProfile = normalizeProfile(req.body, userId);
-  profiles.set(userId, newProfile);
-  syncVolunteerFromProfile(newProfile);
-
-  res.status(201).json({ success: true, message: "Profile created successfully", data: newProfile });
-});
-
-profile.put("/:userId", (req, res) => {
-  const { userId } = req.params;
-  if (!ensureUserId(res, userId)) return;
-
-  const existingProfile = profiles.get(userId);
-  if (!existingProfile) {
-    res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
-    return;
-  }
-
-  const errors = [];
-  const updateData = req.body ?? {};
-
-  if (updateData.fullName !== undefined) {
-    if (typeof updateData.fullName !== "string" || updateData.fullName.trim().length === 0) {
-      errors.push("fullName must be a non-empty string");
-    } else {
-      const result = validateStringLength(
-        updateData.fullName.trim(),
-        "fullName",
-        VALIDATION_RULES.fullName.minLength,
-        VALIDATION_RULES.fullName.maxLength,
-      );
-      if (!result.isValid) errors.push(result.error);
-    }
-  }
-
-  if (updateData.location) {
-    const { address1, address2, city, state, zipCode } = updateData.location;
-
-    if (!address1 || typeof address1 !== "string" || address1.trim().length === 0) {
-      errors.push("location.address1 is required and must be a non-empty string");
-    } else {
-      const result = validateStringLength(
-        address1.trim(),
-        "address1",
-        VALIDATION_RULES.address1.minLength,
-        VALIDATION_RULES.address1.maxLength,
-      );
-      if (!result.isValid) errors.push(result.error);
+    if (!profileData) {
+      res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
+      return;
     }
 
-    if (address2 !== undefined && address2 !== null && address2 !== "") {
-      if (typeof address2 !== "string") {
-        errors.push("location.address2 must be a string");
+    const formattedProfile = {
+      userId: profileData.userId,
+      fullName: profileData.fullName,
+      location: {
+        address1: profileData.address1,
+        address2: profileData.address2,
+        city: profileData.city,
+        state: profileData.state,
+        zipCode: profileData.zipCode,
+      },
+      skills: profileData.skills,
+      preferences: profileData.preferences,
+      availability: profileData.availability,
+    };
+
+    res.status(200).json({ success: true, data: formattedProfile });
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch profile', errors: [error.message] });
+  }
+});
+
+profile.post("/:userId", async (req, res) => {
+  const { userId } = req.params;
+  if (!ensureUserId(res, userId)) return;
+
+  try {
+    const existingProfile = await prisma.userProfile.findUnique({
+      where: { userId }
+    });
+
+    if (existingProfile) {
+      res.status(409).json({ success: false, message: `Profile already exists for user ID: ${userId}` });
+      return;
+    }
+
+    const validation = validateProfileData(req.body);
+    if (!validation.isValid) {
+      res.status(400).json({ success: false, message: "Validation failed", errors: validation.errors });
+      return;
+    }
+
+    const normalized = normalizeProfile(req.body, userId);
+
+    const newProfile = await prisma.userProfile.create({
+      data: {
+        userId: normalized.userId,
+        fullName: normalized.fullName,
+        address1: normalized.location.address1,
+        address2: normalized.location.address2,
+        city: normalized.location.city,
+        state: normalized.location.state,
+        zipCode: normalized.location.zipCode,
+        skills: normalized.skills,
+        preferences: normalized.preferences,
+        availability: normalized.availability,
+      }
+    });
+
+    syncVolunteerFromProfile(normalized);
+
+    const formattedProfile = {
+      userId: newProfile.userId,
+      fullName: newProfile.fullName,
+      location: {
+        address1: newProfile.address1,
+        address2: newProfile.address2,
+        city: newProfile.city,
+        state: newProfile.state,
+        zipCode: newProfile.zipCode,
+      },
+      skills: newProfile.skills,
+      preferences: newProfile.preferences,
+      availability: newProfile.availability,
+    };
+
+    res.status(201).json({ success: true, message: "Profile created successfully", data: formattedProfile });
+  } catch (error) {
+    console.error('Error creating profile:', error);
+    res.status(500).json({ success: false, message: 'Failed to create profile', errors: [error.message] });
+  }
+});
+
+profile.put("/:userId", async (req, res) => {
+  const { userId } = req.params;
+  if (!ensureUserId(res, userId)) return;
+
+  try {
+    const existingProfile = await prisma.userProfile.findUnique({
+      where: { userId }
+    });
+
+    if (!existingProfile) {
+      res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
+      return;
+    }
+
+    const errors = [];
+    const updateData = req.body ?? {};
+
+    if (updateData.fullName !== undefined) {
+      if (typeof updateData.fullName !== "string" || updateData.fullName.trim().length === 0) {
+        errors.push("fullName must be a non-empty string");
       } else {
         const result = validateStringLength(
-          address2.trim(),
-          "address2",
-          undefined,
-          VALIDATION_RULES.address2.maxLength,
+          updateData.fullName.trim(),
+          "fullName",
+          VALIDATION_RULES.fullName.minLength,
+          VALIDATION_RULES.fullName.maxLength,
         );
         if (!result.isValid) errors.push(result.error);
       }
     }
 
-    if (!city || typeof city !== "string" || city.trim().length === 0) {
-      errors.push("location.city is required and must be a non-empty string");
-    } else {
-      const result = validateStringLength(
-        city.trim(),
-        "city",
-        VALIDATION_RULES.city.minLength,
-        VALIDATION_RULES.city.maxLength,
+    if (updateData.location) {
+      const { address1, address2, city, state, zipCode } = updateData.location;
+
+      if (!address1 || typeof address1 !== "string" || address1.trim().length === 0) {
+        errors.push("location.address1 is required and must be a non-empty string");
+      } else {
+        const result = validateStringLength(
+          address1.trim(),
+          "address1",
+          VALIDATION_RULES.address1.minLength,
+          VALIDATION_RULES.address1.maxLength,
+        );
+        if (!result.isValid) errors.push(result.error);
+      }
+
+      if (address2 !== undefined && address2 !== null && address2 !== "") {
+        if (typeof address2 !== "string") {
+          errors.push("location.address2 must be a string");
+        } else {
+          const result = validateStringLength(
+            address2.trim(),
+            "address2",
+            undefined,
+            VALIDATION_RULES.address2.maxLength,
+          );
+          if (!result.isValid) errors.push(result.error);
+        }
+      }
+
+      if (!city || typeof city !== "string" || city.trim().length === 0) {
+        errors.push("location.city is required and must be a non-empty string");
+      } else {
+        const result = validateStringLength(
+          city.trim(),
+          "city",
+          VALIDATION_RULES.city.minLength,
+          VALIDATION_RULES.city.maxLength,
+        );
+        if (!result.isValid) errors.push(result.error);
+      }
+
+      if (!state || typeof state !== "string") {
+        errors.push("location.state is required and must be a string");
+      } else {
+        const result = validateStateCode(state.trim().toUpperCase());
+        if (!result.isValid) errors.push(result.error);
+      }
+
+      if (!zipCode || typeof zipCode !== "string") {
+        errors.push("location.zipCode is required and must be a string");
+      } else {
+        const result = validateZipCode(zipCode);
+        if (!result.isValid) errors.push(result.error);
+      }
+    }
+
+    if (updateData.skills !== undefined) {
+      const result = validateArray(
+        updateData.skills,
+        "skills",
+        VALIDATION_RULES.skills.minItems,
+        VALIDATION_RULES.skills.maxItems,
+        VALIDATION_RULES.skills.itemMaxLength,
       );
       if (!result.isValid) errors.push(result.error);
     }
 
-    if (!state || typeof state !== "string") {
-      errors.push("location.state is required and must be a string");
-    } else {
-      const result = validateStateCode(state.trim().toUpperCase());
-      if (!result.isValid) errors.push(result.error);
+    if (updateData.preferences !== undefined && updateData.preferences !== null && updateData.preferences !== "") {
+      if (typeof updateData.preferences !== "string") {
+        errors.push("preferences must be a string");
+      } else {
+        const result = validateStringLength(
+          updateData.preferences.trim(),
+          "preferences",
+          undefined,
+          VALIDATION_RULES.preferences.maxLength,
+        );
+        if (!result.isValid) errors.push(result.error);
+      }
     }
 
-    if (!zipCode || typeof zipCode !== "string") {
-      errors.push("location.zipCode is required and must be a string");
-    } else {
-      const result = validateZipCode(zipCode);
-      if (!result.isValid) errors.push(result.error);
-    }
-  }
-
-  if (updateData.skills !== undefined) {
-    const result = validateArray(
-      updateData.skills,
-      "skills",
-      VALIDATION_RULES.skills.minItems,
-      VALIDATION_RULES.skills.maxItems,
-      VALIDATION_RULES.skills.itemMaxLength,
-    );
-    if (!result.isValid) errors.push(result.error);
-  }
-
-  if (updateData.preferences !== undefined && updateData.preferences !== null && updateData.preferences !== "") {
-    if (typeof updateData.preferences !== "string") {
-      errors.push("preferences must be a string");
-    } else {
-      const result = validateStringLength(
-        updateData.preferences.trim(),
-        "preferences",
-        undefined,
-        VALIDATION_RULES.preferences.maxLength,
+    if (updateData.availability !== undefined) {
+      const result = validateArray(
+        updateData.availability,
+        "availability",
+        VALIDATION_RULES.availability.minItems,
+        VALIDATION_RULES.availability.maxItems,
       );
       if (!result.isValid) errors.push(result.error);
     }
-  }
 
-  if (updateData.availability !== undefined) {
-    const result = validateArray(
-      updateData.availability,
-      "availability",
-      VALIDATION_RULES.availability.minItems,
-      VALIDATION_RULES.availability.maxItems,
-    );
-    if (!result.isValid) errors.push(result.error);
-  }
+    if (errors.length > 0) {
+      res.status(400).json({ success: false, message: "Validation failed", errors });
+      return;
+    }
 
-  if (errors.length > 0) {
-    res.status(400).json({ success: false, message: "Validation failed", errors });
-    return;
-  }
+    const updatePayload = {};
 
-  const normalized = {
-    ...existingProfile,
-    ...(updateData.fullName && { fullName: updateData.fullName.trim() }),
-    ...(updateData.location && {
+    if (updateData.fullName) {
+      updatePayload.fullName = updateData.fullName.trim();
+    }
+
+    if (updateData.location) {
+      updatePayload.address1 = updateData.location.address1.trim();
+      updatePayload.address2 = updateData.location.address2 ? updateData.location.address2.trim() : null;
+      updatePayload.city = updateData.location.city.trim();
+      updatePayload.state = updateData.location.state.trim().toUpperCase();
+      updatePayload.zipCode = updateData.location.zipCode.trim();
+    }
+
+    if (updateData.skills) {
+      updatePayload.skills = updateData.skills.map((skill) => skill.trim());
+    }
+
+    if (updateData.preferences !== undefined) {
+      updatePayload.preferences = updateData.preferences ? updateData.preferences.trim() : null;
+    }
+
+    if (updateData.availability) {
+      updatePayload.availability = updateData.availability.map((day) => day.trim());
+    }
+
+    const updatedProfile = await prisma.userProfile.update({
+      where: { userId },
+      data: updatePayload
+    });
+
+    const normalized = {
+      userId: updatedProfile.userId,
+      fullName: updatedProfile.fullName,
       location: {
-        address1: updateData.location.address1.trim(),
-        address2: updateData.location.address2 ? updateData.location.address2.trim() : undefined,
-        city: updateData.location.city.trim(),
-        state: updateData.location.state.trim().toUpperCase(),
-        zipCode: updateData.location.zipCode.trim(),
+        address1: updatedProfile.address1,
+        address2: updatedProfile.address2,
+        city: updatedProfile.city,
+        state: updatedProfile.state,
+        zipCode: updatedProfile.zipCode,
       },
-    }),
-    ...(updateData.skills && { skills: updateData.skills.map((skill) => skill.trim()) }),
-    ...(updateData.preferences !== undefined && {
-      preferences: updateData.preferences ? updateData.preferences.trim() : undefined,
-    }),
-    ...(updateData.availability && { availability: updateData.availability.map((day) => day.trim()) }),
-  };
+      skills: updatedProfile.skills,
+      preferences: updatedProfile.preferences,
+      availability: updatedProfile.availability,
+    };
 
-  profiles.set(userId, normalized);
-  syncVolunteerFromProfile(normalized);
+    syncVolunteerFromProfile(normalized);
 
-  res.status(200).json({ success: true, message: "Profile updated successfully", data: normalized });
+    res.status(200).json({ success: true, message: "Profile updated successfully", data: normalized });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ success: false, message: 'Failed to update profile', errors: [error.message] });
+  }
 });
 
-profile.delete("/:userId", (req, res) => {
+profile.delete("/:userId", async (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
-  if (!profiles.has(userId)) {
-    res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
-    return;
-  }
+  try {
+    const existingProfile = await prisma.userProfile.findUnique({
+      where: { userId }
+    });
 
-  profiles.delete(userId);
-  res.status(200).json({ success: true, message: "Profile deleted successfully" });
+    if (!existingProfile) {
+      res.status(404).json({ success: false, message: `Profile not found for user ID: ${userId}` });
+      return;
+    }
+
+    await prisma.userProfile.delete({
+      where: { userId }
+    });
+
+    res.status(200).json({ success: true, message: "Profile deleted successfully" });
+  } catch (error) {
+    console.error('Error deleting profile:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete profile', errors: [error.message] });
+  }
 });
 
 export default profile;
