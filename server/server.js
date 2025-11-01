@@ -22,10 +22,7 @@ export async function buildApp() {
   const app = express();
   app.use(express.json());
 
-  // seed before routes
-  store.upsertVolunteers(demoVols);
-  store.upsertEvents(demoEvents);
-
+  
   // mount APIs
   app.use("/api", api);                              // /api/events, /api/volunteer-history
   app.use("/api/match", matching);                   // /api/match/...

@@ -1,4 +1,75 @@
 import prisma from '../server/db.js';
+import { demoVols, demoEvents } from "../server/demo_data/volunteer_events.data.js";
+
+async function seedDemo() {
+  console.log("Seeding demo volunteers and events...");
+
+  // per-volunteer TX: credentials first, then profile
+  for (const v of demoVols) {
+    await prisma.$transaction(async (tx) => {
+      await tx.userCredentials.upsert({
+        where: { userId: v.id },
+        update: {}, // no change on reseed
+        create: {
+          userId: v.id,
+          password: "demo" // placeholder; hash in real apps
+        },
+      });
+
+      await tx.userProfile.upsert({
+        where: { userId: v.id },
+        update: {
+          fullName: v.name,
+          address1: v.location,
+          city: v.location,
+          state: "TX",
+          zipCode: "00000",
+          skills: v.skills,
+          preferences: null,
+          availability: [],
+        },
+        create: {
+          userId: v.id,
+          fullName: v.name,
+          address1: v.location,
+          city: v.location,
+          state: "TX",
+          zipCode: "00000",
+          skills: v.skills,
+          preferences: null,
+          availability: [],
+        },
+      });
+    });
+  }
+
+  // events
+  for (const e of demoEvents) {
+    await prisma.eventDetails.upsert({
+      where: { id: e.id },
+      update: {
+        eventName: e.name,
+        description: e.name,
+        location: e.location,
+        requiredSkills: e.requiredSkills,
+        urgency: e.urgency,
+        eventDate: new Date(e.date),
+      },
+      create: {
+        id: e.id,
+        eventName: e.name,
+        description: e.name,
+        location: e.location,
+        requiredSkills: e.requiredSkills,
+        urgency: e.urgency,
+        eventDate: new Date(e.date),
+      },
+    });
+  }
+
+  console.log("Demo volunteers and events seeded.");
+}
+
 
 const usStates = [
   { stateCode: 'AL', stateName: 'Alabama' },
@@ -70,6 +141,7 @@ async function seedStates() {
 async function main() {
   try {
     await seedStates();
+    await seedDemo();
   } catch (error) {
     console.error('Error seeding database:', error);
     process.exit(1);
