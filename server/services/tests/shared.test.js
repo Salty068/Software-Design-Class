@@ -5,6 +5,54 @@ import {
   isParticipationStatus, PARTICIPATION_STATUSES
 } from "../../shared.js";
 
+describe("ensureEventPayload additional guards", () => {
+  const base = {
+    name: "Cleanup",
+    description: "desc",
+    location: "Austin",
+    requiredSkills: ["bag"],
+    urgency: "Low",
+  };
+
+ it("rejects invalid ISO date format (not yyyy-mm-dd)", () => {
+  const bad = { ...base, eventDate: "not-a-date" };
+  expect(() => ensureEventPayload(bad)).toThrow();
+});
+
+  it("rejects overlong title (length guard)", () => {
+    const bad = {
+      ...base,
+      name: "X".repeat(10_000), 
+      eventDate: "2099-01-01",
+    };
+    expect(() => ensureEventPayload(bad)).toThrow();
+  });
+});
+
+
+describe("shared helpers edge cases (fixed)", () => {
+  it("ensureEventPayload rejects invalid urgency", () => {
+  const bad = {
+    name: 2,                 
+    description: 3,          
+    location: " Park ",
+    requiredSkills: [" x ", "x", "", " y "],
+    urgency: "weird",        
+    eventDate: "2099-02-03", 
+  };
+  expect(() => ensureEventPayload(bad)).toThrow(/Invalid urgency/);
+});
+
+  it("toUniqueSkills trims, stringifies, filters empties, and dedupes", () => {
+    expect(toUniqueSkills([" a ", "", "a", "b", 123, "123"])).toEqual([
+      "a",
+      "b",
+      "123",
+    ]);
+  });
+});
+
+
 describe("shared helpers", () => {
   it("generateId uses prefix and increments", () => {
     const a = generateId("x");

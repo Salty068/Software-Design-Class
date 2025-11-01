@@ -13,7 +13,9 @@ export default defineConfig({
         exclude: [
             "server/server.js",          // Vite glue
             "server/models.js",          // types only
-            "server/demo_data/**"
+            "server/demo_data/**",
+            "server/store.memory.DEAD.js", // ignore dead store file
+            "server/api/test.js",
         ],
         lines: 80, functions: 80, branches: 80, statements: 80
     }

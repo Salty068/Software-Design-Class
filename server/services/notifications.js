@@ -1,8 +1,13 @@
 import { EventEmitter } from "events";
 import { PrismaClient } from "@prisma/client";
 
-export const bus = new EventEmitter(); // emits: notice:<volId>
-const prisma = new PrismaClient();
+export const bus = new EventEmitter();
+
+let __prisma;
+export function getPrisma() {
+  if (!__prisma) __prisma = new PrismaClient();
+  return __prisma;
+}
 
 const toMillis = (v) => (typeof v === "bigint" ? Number(v) : v);
 const serialize = (n) => ({
@@ -14,12 +19,10 @@ const serialize = (n) => ({
   createdAtMs: toMillis(n.createdAtMs),
 });
 
-/**
- * Create a notice row and emit over SSE bus.
- * @param {string} volunteerId
- * @param {{title:string, body?:string, type?:"info"|"success"|"warn"|"error"}} param1
- */
+
+
 export async function notify(volunteerId, { title, body, type = "info" }) {
+  const prisma = getPrisma();
   const created = await prisma.notice.create({
     data: { volunteerId, title, body, type },
   });
@@ -29,6 +32,8 @@ export async function notify(volunteerId, { title, body, type = "info" }) {
 }
 
 export function startReminders() {
+  const prisma = getPrisma();
+
   const TICK_MS = 60_000;
   const WINDOW_MS = 24 * 3600 * 1000;
   const DEDUP_MS = 25 * 3600 * 1000;
@@ -39,17 +44,8 @@ export function startReminders() {
 
     try {
       const assigns = await prisma.assignment.findMany({
-        where: {
-          event: {
-            eventDate: {
-              gt: new Date(now),
-              lte: soon,
-            },
-          },
-        },
-        include: {
-          event: true,
-        },
+        where: { event: { eventDate: { gt: new Date(now), lte: soon } } },
+        include: { event: true },
       });
 
       for (const a of assigns) {
@@ -63,9 +59,7 @@ export function startReminders() {
           where: {
             volunteerId: a.volunteerId,
             title,
-            createdAtMs: {
-              gte: BigInt(Math.floor(now - DEDUP_MS)),
-            },
+            createdAtMs: { gte: BigInt(Math.floor(now - DEDUP_MS)) },
           },
           select: { id: true },
         });

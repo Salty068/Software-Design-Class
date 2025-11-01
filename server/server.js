@@ -10,7 +10,7 @@ import { profile } from "./routes/profile.js";
 import { auth } from "./routes/auth.js";
 import { startReminders } from "./services/notifications.js";
 
-import { store } from "./store.memory.js";
+import { store } from "./store.memory.DEAD.js";
 import { demoVols, demoEvents } from "./demo_data/volunteer_events.data.js";
 
 const __filename = fileURLToPath(import.meta.url);

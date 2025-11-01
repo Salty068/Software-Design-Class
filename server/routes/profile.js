@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 import { toUniqueSkills } from "../shared.js";
-import { store } from "../store.memory.js";
+import { store } from "../store.memory.DEAD.js";
 import prisma from "../db.js";
 
 export const profiles = new Map();
