@@ -1,220 +1,187 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { z } from "zod";
 import prisma from "../db.js";
+import { authenticate } from "./middleware/auth.js";
 
-export const auth = Router();
+const router = Router();
 
 const SALT_ROUNDS = 10;
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
-const JWT_EXPIRES_IN = "7d"; // Token expires in 7 days
+const JWT_SECRET = process.env.JWT_SECRET || "change-this";
+const JWT_EXPIRES_IN = "7d";
 
-export function validateCredentials(email, password) {
-  const errors = [];
+const emailSchema = z.email()
+  .trim()
+  .min(1)
+  .max(100)
+  .transform((v) => v.toLowerCase());
 
-  if (!email || typeof email !== 'string' || email.trim().length === 0) {
-    errors.push('Email is required and must be a non-empty string');
-  } else if (email.length > 100) {
-    errors.push('Email must not exceed 100 characters');
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.push('Email must be a valid email address');
-  }
+const passwordSchema = z.string().min(8).max(100);
 
-  if (!password || typeof password !== 'string') {
-    errors.push('Password is required and must be a string');
-  } else if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
-  } else if (password.length > 100) {
-    errors.push('Password must not exceed 100 characters');
-  }
+const nameSchema = z.string().trim().min(1).max(50);
 
-  return {
-    isValid: errors.length === 0,
-    errors
-  };
-}
+const roleSchema = z.enum(["Volunteer", "Organizer", "Admin"]).optional();
 
-// Generate JWT token
-function generateToken(userId) {
-  return jwt.sign(
-    { userId, role: 'user' }, // You can add role here if you have roles in DB
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+const registerSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  name: nameSchema,
+  role: roleSchema,
+});
+
+const loginSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+});
+
+const changePasswordSchema = z.object({
+  email: emailSchema,
+  currentPassword: z.string().min(8),
+  newPassword: passwordSchema,
+});
+
+function computeProfileComplete(profile) {
+  if (!profile) return false;
+  return [profile.fullName, profile.address1, profile.city, profile.state, profile.zipCode].every(
+    (v) => typeof v === "string" && v.trim().length > 0
   );
 }
 
-auth.post("/register", async (req, res) => {
+function buildUserResponse(credentials, profile, lastLoginIso) {
+  return {
+    id: profile.id,
+    email: credentials.userId,
+    name: profile.fullName,
+    role: profile.role,
+    profileComplete: computeProfileComplete(profile),
+    createdAt: credentials.createdAt.toISOString(),
+    lastLogin: lastLoginIso ?? null,
+  };
+}
+
+function signToken(user) {
+  return jwt.sign(user, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+function formatZodErrors(error) {
+  return error.errors.map((e) => e.message);
+}
+
+router.post("/register", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ message: "Validation failed", errors: formatZodErrors(parsed.error) });
 
-    const validation = validateCredentials(email, password);
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: validation.errors
-      });
-    }
+    const { email, password, name, role } = parsed.data;
 
-    const existingUser = await prisma.userCredentials.findUnique({
-      where: { userId: email.trim().toLowerCase() }
-    });
-
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: 'User already exists',
-        errors: ['A user with this email already exists']
-      });
-    }
+    const existing = await prisma.userCredentials.findUnique({ where: { userId: email } });
+    if (existing) return res.status(400).json({ message: "Email already exists" });
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const newUser = await prisma.userCredentials.create({
+    const credentials = await prisma.userCredentials.create({
+      data: { userId: email, password: hashedPassword },
+    });
+
+    const profile = await prisma.userProfile.create({
       data: {
-        userId: email.trim().toLowerCase(),
-        password: hashedPassword
-      }
+        userId: email,
+        fullName: name,
+        role: role || "Volunteer",
+        address1: "",
+        city: "",
+        state: "",
+        zipCode: "",
+        skills: [],
+        availability: {},
+        preferences: null,
+      },
     });
 
-    // Generate token for immediate login after registration
-    const token = generateToken(newUser.userId);
+    const lastLoginIso = new Date().toISOString();
+    const user = buildUserResponse(credentials, profile, lastLoginIso);
+    const token = signToken(user);
 
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      data: { 
-        email: newUser.userId,
-        token // Send token back to client
-      }
-    });
+    return res.status(201).json({ token, user });
   } catch (error) {
-    console.error('Error registering user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to register user',
-      errors: [error.message]
-    });
+    console.log(error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-auth.post("/login", async (req, res) => {
+router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ message: "Validation failed", errors: formatZodErrors(parsed.error) });
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: ['Email and password are required']
-      });
-    }
+    const { email, password } = parsed.data;
 
-    const user = await prisma.userCredentials.findUnique({
-      where: { userId: email.trim().toLowerCase() }
-    });
+    const credentials = await prisma.userCredentials.findUnique({ where: { userId: email } });
+    if (!credentials) return res.status(401).json({ message: "Invalid email or password" });
 
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-        errors: ['Invalid email or password']
-      });
-    }
+    const valid = await bcrypt.compare(password, credentials.password);
+    if (!valid) return res.status(401).json({ message: "Invalid email or password" });
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const profile = await prisma.userProfile.findUnique({ where: { userId: email } });
+    if (!profile) return res.status(500).json({ message: "User profile missing" });
 
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-        errors: ['Invalid email or password']
-      });
-    }
+    const lastLoginIso = new Date().toISOString();
+    const user = buildUserResponse(credentials, profile, lastLoginIso);
+    const token = signToken(user);
 
-    // Generate token
-    const token = generateToken(user.userId);
-
-    res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      data: { 
-        email: user.userId,
-        token // Send token back to client
-      }
-    });
+    return res.status(200).json({ token, user });
   } catch (error) {
-    console.error('Error during login:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to login',
-      errors: [error.message]
-    });
+    console.log(error);
+    return res.status(500).json({ message: "Internal Server Error", e: error });
   }
 });
 
-auth.put("/change-password", async (req, res) => {
+router.get("/me", authenticate, async (req, res) => {
   try {
-    const { email, currentPassword, newPassword } = req.body;
+    const payload = req.user;
+    if (!payload?.email) return res.status(401).json({ message: "Invalid or expired token" });
 
-    if (!email || !currentPassword || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: ['Email, currentPassword, and newPassword are required']
-      });
-    }
+    const credentials = await prisma.userCredentials.findUnique({ where: { userId: payload.email } });
+    const profile = await prisma.userProfile.findUnique({ where: { userId: payload.email } });
 
-    const validation = validateCredentials(email, newPassword);
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: validation.errors
-      });
-    }
+    if (!credentials || !profile) return res.status(401).json({ message: "Invalid or expired token" });
 
-    const user = await prisma.userCredentials.findUnique({
-      where: { userId: email.trim().toLowerCase() }
-    });
+    const user = buildUserResponse(credentials, profile, payload.lastLogin);
+    return res.status(200).json(user);
+  }catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-        errors: ['User does not exist']
-      });
-    }
+router.put("/change-password", async (req, res) => {
+  try {
+    const parsed = changePasswordSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ message: "Validation failed", errors: formatZodErrors(parsed.error) });
 
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const { email, currentPassword, newPassword } = parsed.data;
 
-    if (!isCurrentPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid current password',
-        errors: ['Current password is incorrect']
-      });
-    }
+    const credentials = await prisma.userCredentials.findUnique({ where: { userId: email } });
+    if (!credentials) return res.status(404).json({ message: "User not found" });
 
-    const hashedNewPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    const valid = await bcrypt.compare(currentPassword, credentials.password);
+    if (!valid) return res.status(401).json({ message: "Current password is incorrect" });
+
+    const hashedNew = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
     await prisma.userCredentials.update({
-      where: { userId: email.trim().toLowerCase() },
-      data: { password: hashedNewPassword }
+      where: { userId: email },
+      data: { password: hashedNew },
     });
 
-    res.status(200).json({
-      success: true,
-      message: 'Password changed successfully'
-    });
-  } catch (error) {
-    console.error('Error changing password:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to change password',
-      errors: [error.message]
-    });
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-export default auth;
+export default router;

@@ -7,7 +7,7 @@ import api from "./api/index.js";
 import { matching } from "./routes/matching.js";
 import { notifications } from "./routes/notifications.js";
 import { profile } from "./routes/profile.js";
-import { auth } from "./routes/auth.js";
+import auth  from "./routes/auth.js";
 import home from "./routes/home.js";
 import { startReminders } from "./services/notifications.js";
 import reportsRouter from "./routes/reports.js";

@@ -12,7 +12,6 @@ import {
   resetVolunteerHistory,
 } from "./volunteerHistory.prisma.js";
 
-import { auth } from "../routes/middleware/authenticate.js";
 
 const router = Router();
 
