@@ -19,8 +19,8 @@ enum NoticeType {
 
 model UserCredentials {
   id        String   @id @default(uuid())
-  userId    String   @unique @db.VarChar(100)
-  password  String   @db.VarChar(255)
+  userId    String   @unique
+  password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -31,15 +31,15 @@ model UserCredentials {
 
 model UserProfile {
   id           String   @id @default(uuid())
-  userId       String   @unique @db.VarChar(100)
-  fullName     String   @db.VarChar(50)
-  address1     String   @db.VarChar(100)
-  address2     String?  @db.VarChar(100)
-  city         String   @db.VarChar(100)
-  state        String   @db.Char(2)
-  zipCode      String   @db.VarChar(10)
+  userId       String   @unique
+  fullName     String
+  address1     String
+  address2     String?
+  city         String
+  state        String
+  zipCode      String
   skills       Json
-  preferences  String?  @db.VarChar(500)
+  preferences  String?
   availability Json
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -54,8 +54,8 @@ model UserProfile {
 
 model States {
   id        Int      @id @default(autoincrement())
-  stateCode String   @unique @db.Char(2)
-  stateName String   @db.VarChar(100)
+  stateCode String   @unique
+  stateName String
   createdAt DateTime @default(now())
 
   @@map("states")
@@ -63,11 +63,11 @@ model States {
 
 model EventDetails {
   id             String   @id @default(uuid())
-  eventName      String   @db.VarChar(100)
-  description    String   @db.Text
-  location       String   @db.VarChar(200)
+  eventName      String
+  description    String
+  location       String
   requiredSkills Json
-  urgency        String   @db.VarChar(20)
+  urgency        String
   eventDate      DateTime
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -80,11 +80,11 @@ model EventDetails {
 
 model VolunteerHistory {
   id                  String   @id @default(uuid())
-  userId              String   @db.VarChar(100)
+  userId              String
   eventId             String
-  participationStatus String   @db.VarChar(50)
+  participationStatus String
   hoursVolunteered    Float?
-  feedback            String?  @db.Text
+  feedback            String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -96,9 +96,9 @@ model VolunteerHistory {
 
 model Assignment {
   id          String @id @default(uuid())
-  volunteerId String @db.VarChar(100)
+  volunteerId String
   eventId     String
-  createdAtMs BigInt @default(dbgenerated("(UNIX_TIMESTAMP() * 1000)")) @db.BigInt
+  createdAtMs Int    @default(0)
 
   volunteer UserProfile  @relation(fields: [volunteerId], references: [userId], onDelete: Cascade)
   event     EventDetails @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -110,11 +110,11 @@ model Assignment {
 
 model Notice {
   id          String     @id @default(uuid())
-  volunteerId String     @db.VarChar(100)
-  title       String     @db.VarChar(200)
-  body        String?    @db.Text
+  volunteerId String
+  title       String
+  body        String?
   type        NoticeType @default(info)
-  createdAtMs BigInt     @default(dbgenerated("(UNIX_TIMESTAMP() * 1000)")) @db.BigInt
+  createdAtMs Int        @default(0)
 
   volunteer UserProfile @relation(fields: [volunteerId], references: [userId], onDelete: Cascade)
 
