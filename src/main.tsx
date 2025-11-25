@@ -11,6 +11,8 @@ import FindEvents from './pages/FindEvents.tsx';
 import VolunteerMatching from './pages/VolunteerMatching.tsx';
 import EventManage from './pages/event_manage.tsx';
 import VolunteerHistory from './pages/volunteer_history.tsx';
+import AdminDashboard from './pages/AdminDashboard.tsx';
+import ManageUsers from './pages/ManageUsers.tsx';
 import Reports from './pages/Reports.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
 import ManageUsers from './pages/ManageUsers.tsx';
@@ -45,9 +47,9 @@ const router = createBrowserRouter([
       { path: "/register", element: <Register />},
       { path: "/event-manage", element:<EventManage/>},
       { path: "/volunteer-history", element: <VolunteerHistory/>},
-      { path: "/reports", element: <Reports/>},
       { path: "/admin/dashboard", element: <AdminDashboard/>},
       { path: "/admin/users", element: <ManageUsers/>}
+      { path: "/reports", element: <Reports/>}
     ],
   },
 ]);
