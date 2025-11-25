@@ -10,9 +10,7 @@ import { profile } from "./routes/profile.js";
 import { auth } from "./routes/auth.js";
 import home from "./routes/home.js";
 import { startReminders } from "./services/notifications.js";
-
-import { store } from "./store.memory.DEAD.js";
-import { demoVols, demoEvents } from "./demo_data/volunteer_events.data.js";
+import reportsRouter from "./routes/reports.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,6 +29,7 @@ export async function buildApp() {
   app.use("/api/profile", profile);                  // /api/profile/...
   app.use("/api/home", home);                        // /api/home/...
   app.use("/api/auth", auth);                        // /api/auth/...
+  app.use("/api/reports", reportsRouter);            // /api/reports/..
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

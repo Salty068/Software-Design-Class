@@ -10,6 +10,7 @@ import Register from './pages/Register.tsx';
 import VolunteerMatchingDemo from './pages/VolunteerMatching.tsx';
 import EventManage from './pages/event_manage.tsx';
 import VolunteerHistory from './pages/volunteer_history.tsx';
+import Reports from './pages/Reports.tsx';
 import { NotificationProvider } from "./components/NotificationProvider.tsx";
 import { ToastProvider } from "./components/ToastProvider.tsx";
 
@@ -34,7 +35,8 @@ const router = createBrowserRouter([
       { path: "/login", element: <Login />},
       { path: "/register", element: <Register />},
       { path: "/event-manage", element:<EventManage/>},
-      { path: "/volunteer-history", element: <VolunteerHistory/>}
+      { path: "/volunteer-history", element: <VolunteerHistory/>},
+      { path: "/reports", element: <Reports/>}
     ],
   },
 ]);
