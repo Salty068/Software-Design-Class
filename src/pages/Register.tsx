@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { ChangeEvent, FormEvent } from 'react';
+import { useAuth } from '../contexts/AuthContext.simple.tsx';
 
 type Role = 'volunteer' | 'organizer' | 'admin';
 type RegisterForm = { name: string; email: string; password: string; role: Role };
@@ -14,6 +15,8 @@ export default function Register() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const { register } = useAuth();
+  const navigate = useNavigate();
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -33,23 +36,13 @@ export default function Register() {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: form.email, 
-          password: form.password 
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert('Registration successful! You can now login.');
-        console.log('User registered:', data.data.userId);
-        setForm({ name: '', email: '', password: '', role: 'volunteer' });
+      const success = await register(form.email, form.password, form.name, form.role as 'volunteer' | 'admin');
+      
+      if (success) {
+        // Navigate to home page after successful registration
+        navigate('/');
       } else {
-        setError(data.errors?.join(', ') || data.message || 'Registration failed');
+        setError('Registration failed. Please try again.');
       }
     } catch (err) {
       setError('Network error. Please try again.');

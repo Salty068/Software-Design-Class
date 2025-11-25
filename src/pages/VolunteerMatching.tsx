@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNotify, useServerNotifications } from "../components/NotificationProvider";
+import { useEffect, useState, useMemo } from "react";
+import { useNotify, useServerNotifications } from "../components/NotificationProvider.tsx";
 
 type Volunteer = { id: string; name: string; location: string; skills: string[] };
 type EventItem = { id: string; name: string; location: string; requiredSkills: string[]; date: string; urgency: "Low"|"Medium"|"High" };

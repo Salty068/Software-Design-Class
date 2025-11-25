@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { ChangeEvent, FormEvent } from 'react';
+import { useAuth } from '../contexts/AuthContext.simple.tsx';
 
 type LoginForm = { email: string; password: string };
 
@@ -8,6 +9,8 @@ export default function Login() {
   const [form, setForm] = useState<LoginForm>({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target as HTMLInputElement;
@@ -21,25 +24,20 @@ export default function Login() {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: form.email, 
-          password: form.password 
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert('Logged in successfully!');
-        console.log('User:', data.data.userId);
+      const success = await login(form.email, form.password);
+      
+      if (success) {
+        // Redirect based on role - admin to dashboard, volunteers to home
+        if (form.email.includes('admin')) {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/');
+        }
       } else {
-        setError(data.message || 'Login failed');
+        setError('Login failed. Please try again.');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError('Login failed. Please try again.');
       console.error('Login error:', err);
     } finally {
       setLoading(false);

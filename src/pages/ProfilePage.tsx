@@ -5,6 +5,93 @@ import { getProfile, createProfile, updateProfile } from "../services/profile.ap
 import type { ProfileData } from "../services/profile.api";
 import { useToast } from "../components/ToastProvider";
 
+// Custom CSS for DatePicker to match theme
+const datePickerStyles = `
+  .react-datepicker {
+    border: 2px solid #fed7aa !important;
+    border-radius: 0.5rem !important;
+    background: linear-gradient(to bottom right, #ffffff, #fff7ed) !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  }
+  
+  .react-datepicker__header {
+    background: linear-gradient(to right, #f97316, #ea580c) !important;
+    border-bottom: 1px solid #fed7aa !important;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+  }
+  
+  .react-datepicker__current-month,
+  .react-datepicker__day-name {
+    color: white !important;
+    font-weight: 600 !important;
+  }
+  
+  .react-datepicker__day {
+    color: #1f2937 !important;
+    border-radius: 0.375rem !important;
+    margin: 0.125rem !important;
+  }
+  
+  .react-datepicker__day:hover {
+    background-color: #fed7aa !important;
+    color: #ea580c !important;
+  }
+  
+  .react-datepicker__day--selected {
+    background-color: #f97316 !important;
+    color: white !important;
+    font-weight: 600 !important;
+  }
+  
+  .react-datepicker__day--highlighted {
+    background-color: #fbbf24 !important;
+    color: #92400e !important;
+    font-weight: 600 !important;
+    border: 2px solid #f59e0b !important;
+  }
+  
+  .react-datepicker__day--highlighted:hover {
+    background-color: #f59e0b !important;
+    color: white !important;
+  }
+  
+  .react-datepicker__navigation {
+    border: none !important;
+  }
+  
+  .react-datepicker__navigation--previous {
+    border-right-color: white !important;
+  }
+  
+  .react-datepicker__navigation--next {
+    border-left-color: white !important;
+  }
+  
+  .react-datepicker__month-dropdown,
+  .react-datepicker__year-dropdown {
+    background-color: white !important;
+    border: 2px solid #fed7aa !important;
+    border-radius: 0.375rem !important;
+  }
+  
+  .react-datepicker__month-dropdown-container--scroll,
+  .react-datepicker__year-dropdown-container--scroll {
+    max-height: 200px !important;
+  }
+  
+  .react-datepicker__month-option:hover,
+  .react-datepicker__year-option:hover {
+    background-color: #fed7aa !important;
+    color: #ea580c !important;
+  }
+  
+  .react-datepicker__month-option--selected,
+  .react-datepicker__year-option--selected {
+    background-color: #f97316 !important;
+    color: white !important;
+  }
+`;
+
 export default function ProfilePage() {
   const userId = 'user123';
   const toast = useToast();
@@ -188,6 +275,7 @@ export default function ProfilePage() {
 
 return (
   <div className="min-h-screen relative overflow-hidden" style={{ backgroundColor: '#f5efe6' }}>
+    <style dangerouslySetInnerHTML={{ __html: datePickerStyles }} />
     
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       
@@ -496,36 +584,52 @@ return (
             />
           </div>
 
-          <div>
+          <div className="bg-gradient-to-br from-white to-orange-50 p-4 rounded-lg border border-orange-200">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Availability*
             </label>
-            <DatePicker
-              selected={availability.length > 0 ? availability[0] : null}
-              onChange={(date: Date | null) => {
-                if (date) {
-                  const dateExists = availability.some(d => d.getTime() === date.getTime());
-                  if (dateExists) {
-                    // Remove date if it already exists
-                    setAvailability(availability.filter(d => d.getTime() !== date.getTime()));
-                  } else {
-                    // Add date if it doesn't exist
-                    setAvailability([...availability, date]);
+            <p className="text-xs text-gray-600 mb-3">Click on dates to select/deselect your availability. Selected dates will be highlighted in yellow.</p>
+            <div className="bg-white rounded-lg border border-orange-200 p-3">
+              <DatePicker
+                selected={availability.length > 0 ? availability[0] : null}
+                onChange={(date: Date | null) => {
+                  if (date) {
+                    const dateExists = availability.some(d => d.getTime() === date.getTime());
+                    if (dateExists) {
+                      // Remove date if it already exists
+                      setAvailability(availability.filter(d => d.getTime() !== date.getTime()));
+                    } else {
+                      // Add date if it doesn't exist
+                      setAvailability([...availability, date]);
+                    }
                   }
-                }
-              }}
-              highlightDates={availability}
-              placeholderText="Click to select available dates"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
-              inline={false}
-              shouldCloseOnSelect={false}
-              showMonthDropdown
-              showYearDropdown
-              dropdownMode="select"
-              minDate={new Date()}
-            />
-            <div className="mt-2 text-sm text-gray-600">
-              Selected dates: {availability.length === 0 ? 'None' : availability.map(date => date.toLocaleDateString()).join(', ')}
+                }}
+                highlightDates={availability}
+                placeholderText="Click to select available dates"
+                className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900 bg-white"
+                inline={false}
+                shouldCloseOnSelect={false}
+                showMonthDropdown
+                showYearDropdown
+                dropdownMode="select"
+                minDate={new Date()}
+              />
+            </div>
+            <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+              <p className="text-sm font-medium text-orange-800 mb-1">Selected Dates:</p>
+              <div className="text-sm text-orange-700">
+                {availability.length === 0 ? (
+                  <span className="italic">No dates selected</span>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {availability.map((date, index) => (
+                      <span key={index} className="bg-orange-200 text-orange-800 px-2 py-1 rounded-md text-xs font-medium">
+                        {date.toLocaleDateString()}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

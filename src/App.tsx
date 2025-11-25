@@ -4,12 +4,14 @@ import { Link } from 'react-router-dom';
 import { getHomeStats, getFeaturedEvents } from './services/home.api';
 import type { HomeStats, FeaturedEvent } from './services/home.api';
 import { useToast } from './components/ToastProvider';
+import { useAuth } from './contexts/AuthContext.simple.tsx';
 
 function App() {
   const [stats, setStats] = useState<HomeStats | null>(null);
   const [events, setEvents] = useState<FeaturedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     loadHomeData();
@@ -63,6 +65,11 @@ function App() {
     }
   };
 
+  // Helper function to get the correct link destination
+  const getAuthenticatedLink = (authenticatedPath: string) => {
+    return isAuthenticated ? authenticatedPath : '/login';
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -93,7 +100,7 @@ function App() {
                 Get Started Today
               </Link>
               <Link
-                to="/volunteer-matching"
+                to={getAuthenticatedLink("/find-events")}
                 className="border-2 border-white text-white hover:bg-black px-8 py-3 rounded-lg font-semibold text-lg transition-colors duration-200"
               >
                 Browse Events
@@ -142,7 +149,7 @@ function App() {
                 <div className="text-4xl mb-4">🎯</div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Smart Matching</h3>
                 <p className="text-gray-600 mb-4">Find opportunities that fit your skills perfectly with our intelligent matching system.</p>
-                <Link to="/volunteer-matching" className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium">
+                <Link to={getAuthenticatedLink("/find-events")} className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium">
                   Find Events →
                 </Link>
               </div>
@@ -153,7 +160,7 @@ function App() {
                 <div className="text-4xl mb-4">📅</div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Flexible Scheduling</h3>
                 <p className="text-gray-600 mb-4">Choose your own schedule and commitment level. Volunteer when it works for you.</p>
-                <Link to="/profile-page" className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium">
+                <Link to={getAuthenticatedLink("/profile-page")} className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium">
                   Set Availability →
                 </Link>
               </div>
@@ -164,7 +171,7 @@ function App() {
                 <div className="text-4xl mb-4">🏆</div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Track Impact</h3>
                 <p className="text-gray-600 mb-4">See your volunteer hours and achievements. Watch your community impact grow.</p>
-                <Link to="/volunteer-history" className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium">
+                <Link to={getAuthenticatedLink("/volunteer-history")} className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium">
                   My History →
                 </Link>
               </div>
@@ -250,7 +257,7 @@ function App() {
             
             <div className="text-center mt-12">
               <Link
-                to="/volunteer-matching"
+                to="/find-events"
                 className="inline-flex items-center bg-orange-600 text-white hover:bg-orange-700 px-6 py-3 rounded-lg font-semibold transition-colors"
               >
                 View All Opportunities
