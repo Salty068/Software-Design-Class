@@ -14,6 +14,8 @@ import VolunteerHistory from './pages/volunteer_history.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
 import ManageUsers from './pages/ManageUsers.tsx';
 import Reports from './pages/Reports.tsx';
+import AdminDashboard from './pages/AdminDashboard.tsx';
+import ManageUsers from './pages/ManageUsers.tsx';
 import { NotificationProvider } from "./components/NotificationProvider.tsx";
 import { ToastProvider } from "./components/ToastProvider.tsx";
 import { AuthProvider } from "./contexts/AuthContext.simple.tsx";
