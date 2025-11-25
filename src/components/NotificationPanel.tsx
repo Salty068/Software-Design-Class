@@ -1,15 +1,42 @@
 import { useNotificationCenter } from "./NotificationProvider";
+import { useEffect, useRef } from "react";
 
-export default function NotificationPanel({ open }: { open: boolean }) {
+export default function NotificationPanel({ 
+  open, 
+  onClose 
+}: { 
+  open: boolean;
+  onClose: () => void;
+}) {
   const { notices, remove, clear } = useNotificationCenter();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Handle click outside to close panel
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
     <div
+        ref={panelRef}
         className="
             fixed right-4 top-16
             w-96 max-w-[95vw]
-            z-50 border bg-white
+            z-50 border bg-white shadow-lg rounded-lg
         "
     >
       <div
@@ -18,11 +45,20 @@ export default function NotificationPanel({ open }: { open: boolean }) {
             p-3 border-b border-orange-500
         "
       >
-        <h3>Notifications</h3>
-        <div>
+        <h3 className="font-semibold">Notifications</h3>
+        <div className="flex items-center gap-3">
           {notices.length > 0 && (
-            <button onClick={clear} className="text-sm underline">Clear all</button>
+            <button onClick={clear} className="text-sm text-orange-600 hover:text-orange-700 underline">
+              Clear all
+            </button>
           )}
+          <button 
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
+            aria-label="Close notifications"
+          >
+            ✕
+          </button>
         </div>
       </div>
 

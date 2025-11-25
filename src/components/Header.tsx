@@ -59,7 +59,7 @@ export default function Header() {
         </div>
       </header>
 
-      <NotificationPanel open={open} />
+      <NotificationPanel open={open} onClose={() => setOpen(false)} />
     </>
   );
 }
