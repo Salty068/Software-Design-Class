@@ -46,7 +46,7 @@ const router = createBrowserRouter([
       { path: "/event-manage", element:<EventManage/>},
       { path: "/volunteer-history", element: <VolunteerHistory/>},
       { path: "/admin/dashboard", element: <AdminDashboard/>},
-      { path: "/admin/users", element: <ManageUsers/>}
+      { path: "/admin/users", element: <ManageUsers/>},
       { path: "/reports", element: <Reports/>}
     ],
   },
