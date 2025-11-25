@@ -28,6 +28,8 @@ export default function Header() {
             <NavLink to="/profile-page" className={({isActive}) => isActive ? "text-black font-medium px-3 py-2 rounded-md bg-gradient-to-r from-orange-100 to-orange-50" : "text-black opacity-70 hover:opacity-100 px-3 py-2 rounded-md hover:bg-gray-100 transition-all duration-200 whitespace-nowrap"}>Profile Page</NavLink>
             <NavLink to="/event-manage" className={({isActive}) => isActive ? "text-black font-medium px-3 py-2 rounded-md bg-gradient-to-r from-orange-100 to-orange-50" : "text-black opacity-70 hover:opacity-100 px-3 py-2 rounded-md hover:bg-gray-100 transition-all duration-200 whitespace-nowrap"}>Event Management</NavLink>
             <NavLink to="/volunteer-history" className={({isActive}) => isActive ? "text-black font-medium px-3 py-2 rounded-md bg-gradient-to-r from-orange-100 to-orange-50" : "text-black opacity-70 hover:opacity-100 px-3 py-2 rounded-md hover:bg-gray-100 transition-all duration-200 whitespace-nowrap"}>Volunteer History</NavLink>
+            <NavLink to="/reports" className={({isActive}) => isActive ? "text-black font-medium px-3 py-2 rounded-md bg-gradient-to-r from-orange-100 to-orange-50" : "text-black opacity-70 hover:opacity-100 px-3 py-2 rounded-md hover:bg-gray-100 transition-all duration-200 whitespace-nowrap"}>Reports</NavLink>
+
           </nav>
 
           {/* Notification Controls */}

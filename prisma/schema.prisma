@@ -17,6 +17,12 @@ enum NoticeType {
   error
 }
 
+enum Role {
+  Volunteer
+  Organizer
+  Admin
+}
+
 model UserCredentials {
   id        String   @id @default(uuid())
   userId    String   @unique
@@ -32,6 +38,7 @@ model UserCredentials {
 model UserProfile {
   id           String   @id @default(uuid())
   userId       String   @unique
+  role         Role     @default(Volunteer)
   fullName     String
   address1     String
   address2     String?

@@ -13,6 +13,7 @@ import EventManage from './pages/event_manage.tsx';
 import VolunteerHistory from './pages/volunteer_history.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
 import ManageUsers from './pages/ManageUsers.tsx';
+import Reports from './pages/Reports.tsx';
 import { NotificationProvider } from "./components/NotificationProvider.tsx";
 import { ToastProvider } from "./components/ToastProvider.tsx";
 import { AuthProvider } from "./contexts/AuthContext.simple.tsx";
@@ -46,6 +47,7 @@ const router = createBrowserRouter([
       { path: "/volunteer-history", element: <VolunteerHistory/>},
       { path: "/admin/dashboard", element: <AdminDashboard/>},
       { path: "/admin/users", element: <ManageUsers/>}
+      { path: "/reports", element: <Reports/>}
     ],
   },
 ]);
