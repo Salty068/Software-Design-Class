@@ -1,16 +1,12 @@
 // server/routes/reports.js (ESM, improved layout)
 
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../db.js";
 import PDFDocument from "pdfkit";
 import { stringify } from "csv-stringify/sync";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-// ---------------------------------------------------------
-// Data builders (Prisma)
-// ---------------------------------------------------------
 
 async function buildVolunteerParticipationRows() {
   const profiles = await prisma.userProfile.findMany({
@@ -95,10 +91,6 @@ async function buildEventAssignmentRows() {
   return rows;
 }
 
-// ---------------------------------------------------------
-// CSV helper
-// ---------------------------------------------------------
-
 function sendCSV(res, rows, filename) {
   if (!rows.length) return res.status(204).end();
 
@@ -115,17 +107,6 @@ function sendCSV(res, rows, filename) {
   res.send(csv);
 }
 
-// ---------------------------------------------------------
-// Tabular PDF helper with explicit column widths
-// ---------------------------------------------------------
-
-/**
- * columns: [
- *   { key: "eventName", label: "Event", width: 170 },
- *   { key: "eventDate", label: "Date", width: 80 },
- *   ...
- * ]
- */
 function sendTabularPDF(res, title, filename, rows, columns) {
   const doc = new PDFDocument({ margin: 40, size: "A4" });
 
