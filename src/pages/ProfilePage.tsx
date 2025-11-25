@@ -3,10 +3,13 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { getProfile, createProfile, updateProfile } from "../services/profile.api";
 import type { ProfileData } from "../services/profile.api";
+import { useToast } from "../components/ToastProvider";
 
 export default function ProfilePage() {
   const userId = 'user123';
+  const toast = useToast();
   
+  const [activeTab, setActiveTab] = useState<'edit' | 'summary'>('edit');
   const [name, setName] = useState('');
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
@@ -18,6 +21,48 @@ export default function ProfilePage() {
   const [availability, setAvailability] = useState<Date[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
+
+ 
+  const availableSkills = [
+    'Event Planning',
+    'Fundraising',
+    'Marketing & Social Media',
+    'Graphic Design',
+    'Photography',
+    'Videography',
+    'Writing & Content Creation',
+    'Public Speaking',
+    'Teaching & Tutoring',
+    'Mentoring',
+    'Administrative Support',
+    'Data Entry',
+    'Customer Service',
+    'Community Outreach',
+    'Food Service',
+    'Cooking',
+    'Childcare',
+    'Elder Care',
+    'Pet Care',
+    'Construction & Repair',
+    'Gardening & Landscaping',
+    'Environmental Conservation',
+    'Medical & Healthcare',
+    'First Aid & CPR',
+    'Translation & Interpretation',
+    'IT & Tech Support',
+    'Web Development',
+    'Legal Assistance',
+    'Accounting & Finance',
+    'Sports & Fitness Coaching',
+  ];
+
+  const toggleSkill = (skill: string) => {
+    setSkills(prev => 
+      prev.includes(skill) 
+        ? prev.filter(s => s !== skill)
+        : [...prev, skill]
+    );
+  };
 
  
   useEffect(() => {
@@ -59,42 +104,42 @@ export default function ProfilePage() {
     
     
     if (!name.trim()) {
-      alert('Please enter your name.');
+      toast.error('Please enter your name.');
       return;
     }
     
     if (!address1.trim()) {
-      alert('Please enter your address.');
+      toast.error('Please enter your address.');
       return;
     }
     
     if (!city.trim()) {
-      alert('Please enter your city.');
+      toast.error('Please enter your city.');
       return;
     }
     
     if (!state) {
-      alert('Please select your state.');
+      toast.error('Please select your state.');
       return;
     }
     
     if (!zip.trim()) {
-      alert('Please enter your zip code.');
+      toast.error('Please enter your zip code.');
       return;
     }
     
     if (zip.length < 5 || zip.length > 9) {
-      alert('Zip code must be between 5 and 9 characters.');
+      toast.error('Zip code must be between 5 and 9 characters.');
       return;
     }
 
     if (skills.length === 0) {
-      alert('Please select at least one skill.');
+      toast.error('Please select at least one skill.');
       return;
     }
 
     if (availability.length === 0) {
-      alert('Please select at least one availability date.');
+      toast.error('Please select at least one availability date.');
       return;
     }
 
@@ -126,26 +171,126 @@ export default function ProfilePage() {
       }
 
       if (response.success) {
-        alert('Profile saved successfully!');
+        toast.success('Profile saved successfully!');
         setProfileExists(true);
+        setActiveTab('summary'); 
       } else {
-        const errorMessage = response.errors?.join('\n') || response.message || 'Failed to save profile';
-        alert('Error saving profile:\n' + errorMessage);
+        const errorMessage = response.errors?.join(', ') || response.message || 'Failed to save profile';
+        toast.error(`Error saving profile: ${errorMessage}`);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('An unexpected error occurred while saving the profile.');
+      toast.error('An unexpected error occurred while saving the profile.');
     } finally {
       setIsLoading(false);
     }
   };
 
 return (
-  <div className="min-h-screen py-8 px-4"> 
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-white shadow-lg rounded-lg p-8 mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8 text-center">Profile Page</h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
+  <div className="min-h-screen relative overflow-hidden" style={{ backgroundColor: '#f5efe6' }}>
+    
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      
+      <div className="absolute top-20 left-10 w-32 h-32 bg-orange-200 rounded-full opacity-20 animate-pulse"></div>
+      <div className="absolute top-40 right-16 w-24 h-24 bg-orange-300 rounded-full opacity-15 animate-bounce" style={{ animationDuration: '3s' }}></div>
+      <div className="absolute bottom-32 left-20 w-40 h-40 bg-orange-100 rounded-full opacity-25"></div>
+      <div className="absolute bottom-20 right-32 w-28 h-28 bg-orange-200 rounded-full opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
+      
+      
+      <div className="absolute top-32 right-8 w-16 h-16 bg-gradient-to-br from-orange-300 to-orange-400 opacity-20 transform rotate-45"></div>
+      <div className="absolute bottom-48 left-8 w-20 h-20 bg-gradient-to-tr from-orange-200 to-orange-300 opacity-15 transform rotate-12"></div>
+      
+      
+      <div className="absolute inset-0 opacity-5">
+        <div className="grid grid-cols-12 gap-8 h-full">
+          {[...Array(60)].map((_, i) => (
+            <div key={i} className="bg-orange-400 rounded-full w-2 h-2 opacity-30"></div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    
+    <div className="relative z-10 py-8 px-4"> 
+      <div className="max-w-4xl mx-auto">
+        
+        <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-orange-100">
+          <div className="relative">
+            
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-50 via-orange-100 to-orange-50">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-orange-200 rounded-full opacity-20 transform translate-x-16 -translate-y-16"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-orange-300 rounded-full opacity-15 transform -translate-x-12 translate-y-12"></div>
+            </div>
+            
+            
+            <div className="relative z-10 py-8 px-8">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold text-gray-800 mb-2">My Profile</h1>
+                  <p className="text-gray-600">Manage your volunteer information and preferences</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        
+        {/* Tabs */}
+        <div className="relative flex bg-gradient-to-r from-orange-50 to-orange-100 px-2 pt-2" style={{ backgroundColor: '#f5efe6' }}>
+          <button
+            onClick={() => setActiveTab('edit')}
+            className={`relative flex-1 py-4 px-6 mx-1 text-center font-semibold rounded-t-xl transition-all duration-300 transform ${
+              activeTab === 'edit'
+                ? 'text-orange-700 bg-white shadow-lg scale-105 border-t-4 border-orange-500 z-10'
+                : 'text-gray-600 bg-orange-100 hover:bg-orange-200 hover:text-orange-700 hover:scale-102 shadow-sm'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-3">
+              <div className={`p-1.5 rounded-full transition-all duration-300 ${
+                activeTab === 'edit' ? 'bg-orange-100' : 'bg-white/50'
+              }`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <span className="text-lg">Edit Profile</span>
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('summary')}
+            className={`relative flex-1 py-4 px-6 mx-1 text-center font-semibold rounded-t-xl transition-all duration-300 transform ${
+              activeTab === 'summary'
+                ? 'text-orange-700 bg-white shadow-lg scale-105 border-t-4 border-orange-500 z-10'
+                : 'text-gray-600 bg-orange-100 hover:bg-orange-200 hover:text-orange-700 hover:scale-102 shadow-sm'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-3">
+              <div className={`p-1.5 rounded-full transition-all duration-300 ${
+                activeTab === 'summary' ? 'bg-orange-100' : 'bg-white/50'
+              }`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <span className="text-lg">View Summary</span>
+            </span>
+          </button>
+        </div>
+
+        
+        <div className="bg-white shadow-inner rounded-b-xl border-t-0 relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-orange-50 to-transparent opacity-40 rounded-full transform translate-x-32 -translate-y-32"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-orange-50 to-transparent opacity-40 rounded-full transform -translate-x-24 translate-y-24"></div>
+          </div>
+
+          <div className="relative z-10 p-8">
+            {activeTab === 'edit' ? (
+              /* Edit Profile Form */
+              <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Name*
@@ -213,7 +358,57 @@ return (
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
               >
                 <option value="">Select State</option>
+                <option value="AL">Alabama</option>
+                <option value="AK">Alaska</option>
+                <option value="AZ">Arizona</option>
+                <option value="AR">Arkansas</option>
+                <option value="CA">California</option>
+                <option value="CO">Colorado</option>
+                <option value="CT">Connecticut</option>
+                <option value="DE">Delaware</option>
+                <option value="FL">Florida</option>
+                <option value="GA">Georgia</option>
+                <option value="HI">Hawaii</option>
+                <option value="ID">Idaho</option>
+                <option value="IL">Illinois</option>
+                <option value="IN">Indiana</option>
+                <option value="IA">Iowa</option>
+                <option value="KS">Kansas</option>
+                <option value="KY">Kentucky</option>
+                <option value="LA">Louisiana</option>
+                <option value="ME">Maine</option>
+                <option value="MD">Maryland</option>
+                <option value="MA">Massachusetts</option>
+                <option value="MI">Michigan</option>
+                <option value="MN">Minnesota</option>
+                <option value="MS">Mississippi</option>
+                <option value="MO">Missouri</option>
+                <option value="MT">Montana</option>
+                <option value="NE">Nebraska</option>
+                <option value="NV">Nevada</option>
+                <option value="NH">New Hampshire</option>
+                <option value="NJ">New Jersey</option>
+                <option value="NM">New Mexico</option>
+                <option value="NY">New York</option>
+                <option value="NC">North Carolina</option>
+                <option value="ND">North Dakota</option>
+                <option value="OH">Ohio</option>
+                <option value="OK">Oklahoma</option>
+                <option value="OR">Oregon</option>
+                <option value="PA">Pennsylvania</option>
+                <option value="RI">Rhode Island</option>
+                <option value="SC">South Carolina</option>
+                <option value="SD">South Dakota</option>
+                <option value="TN">Tennessee</option>
                 <option value="TX">Texas</option>
+                <option value="UT">Utah</option>
+                <option value="VT">Vermont</option>
+                <option value="VA">Virginia</option>
+                <option value="WA">Washington</option>
+                <option value="WV">West Virginia</option>
+                <option value="WI">Wisconsin</option>
+                <option value="WY">Wyoming</option>
+                <option value="DC">District of Columbia</option>
               </select>
             </div>
 
@@ -234,19 +429,59 @@ return (
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Skills* (Hold Ctrl/Cmd to select multiple)
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Skills* <span className="text-gray-500 font-normal">({skills.length} selected)</span>
             </label>
-            <select 
-              multiple 
-              value={skills} 
-              onChange={(e) => setSkills(Array.from(e.target.selectedOptions, option => option.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 text-black bg-white"
-            >
-              <option value="skill1">Skill 1</option>
-              <option value="skill2">Skill 2</option>
-              <option value="skill3">Skill 3</option>
-            </select>
+            
+            
+            {skills.length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex flex-wrap gap-2">
+                  {skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium"
+                    >
+                      {skill}
+                      <button
+                        type="button"
+                        onClick={() => toggleSkill(skill)}
+                        className="ml-1 hover:text-blue-900 focus:outline-none"
+                        aria-label={`Remove ${skill}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Checkbox grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-4 border border-gray-300 rounded-lg bg-gray-50">
+              {availableSkills.map((skill) => (
+                <label
+                  key={skill}
+                  className={`flex items-center space-x-2 p-3 rounded-lg cursor-pointer transition-all duration-150 ${
+                    skills.includes(skill)
+                      ? 'bg-blue-100 border-2 border-blue-500'
+                      : 'bg-white border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={skills.includes(skill)}
+                    onChange={() => toggleSkill(skill)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className={`text-sm ${skills.includes(skill) ? 'font-medium text-blue-900' : 'text-gray-700'}`}>
+                    {skill}
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -283,6 +518,7 @@ return (
               placeholderText="Click to select available dates"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
               inline={false}
+              shouldCloseOnSelect={false}
               showMonthDropdown
               showYearDropdown
               dropdownMode="select"
@@ -296,29 +532,83 @@ return (
           <button 
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 font-medium text-lg disabled:bg-blue-400 disabled:cursor-not-allowed"
+            className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition duration-200 font-medium text-lg disabled:bg-orange-400 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Saving...' : (profileExists ? 'Update Profile' : 'Save Profile')}
           </button>
         </form>
-      </div>
-
-      {/* Profile Summary */}
-      <div className="bg-white shadow-lg rounded-lg p-8">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-6">Profile Summary</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex"><span className="font-medium text-gray-600 w-24">Name:</span> <span className="text-gray-800">{name || 'Not provided'}</span></div>
-          <div className="flex"><span className="font-medium text-gray-600 w-24">State:</span> <span className="text-gray-800">{state || 'Not provided'}</span></div>
-          <div className="flex"><span className="font-medium text-gray-600 w-24">Address:</span> <span className="text-gray-800">{[address1, address2].filter(Boolean).join(', ') || 'Not provided'}</span></div>
-          <div className="flex"><span className="font-medium text-gray-600 w-24">Zip:</span> <span className="text-gray-800">{zip || 'Not provided'}</span></div>
-          <div className="flex"><span className="font-medium text-gray-600 w-24">City:</span> <span className="text-gray-800">{city || 'Not provided'}</span></div>
-          <div className="flex"><span className="font-medium text-gray-600 w-24">Skills:</span> <span className="text-gray-800">{skills.length > 0 ? skills.join(', ') : 'Not provided'}</span></div>
-          <div className="col-span-1 md:col-span-2">
-            <div className="flex"><span className="font-medium text-gray-600 w-24">Preference:</span> <span className="text-gray-800">{preference || 'Not provided'}</span></div>
+          ) : (
+            /* Profile Summary */
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-800 mb-6">Your Profile</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">Name</span>
+                  <p className="mt-1 text-lg text-gray-900">{name || 'Not provided'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">State</span>
+                  <p className="mt-1 text-lg text-gray-900">{state || 'Not provided'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">City</span>
+                  <p className="mt-1 text-lg text-gray-900">{city || 'Not provided'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">Zip Code</span>
+                  <p className="mt-1 text-lg text-gray-900">{zip || 'Not provided'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg md:col-span-2">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">Address</span>
+                  <p className="mt-1 text-lg text-gray-900">{[address1, address2].filter(Boolean).join(', ') || 'Not provided'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg md:col-span-2">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">Skills</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {skills.length > 0 ? (
+                      skills.map((skill, index) => (
+                        <span key={index} className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
+                          {skill}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-gray-900">Not provided</p>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg md:col-span-2">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">Preferences</span>
+                  <p className="mt-1 text-lg text-gray-900">{preference || 'Not provided'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg md:col-span-2">
+                  <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">Availability</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {availability.length > 0 ? (
+                      availability.map((date, index) => (
+                        <span key={index} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                          {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-gray-900">Not provided</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <button
+                  onClick={() => setActiveTab('edit')}
+                  className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition duration-200 font-medium text-lg"
+                >
+                  Edit Profile
+                </button>
+              </div>
+            </div>
+          )}
           </div>
-          <div className="col-span-1 md:col-span-2">
-            <div className="flex"><span className="font-medium text-gray-600 w-24">Availability:</span> <span className="text-gray-800">{availability.length > 0 ? availability.map(date => date.toDateString()).join(', ') : 'Not provided'}</span></div>
-          </div>
+        </div>
         </div>
       </div>
     </div>
