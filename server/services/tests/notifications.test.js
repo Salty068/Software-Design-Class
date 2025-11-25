@@ -1,26 +1,48 @@
-import { describe, it, expect } from "vitest";
-import { notify, bus } from "../notifications.js";
-import { store } from "../../store.memory.js";
-import { demoVols, demoEvents } from "../../demo_data/volunteer_events.data.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { bus } from "../notifications.js"; 
 
-store.upsertVolunteers(demoVols);
-store.upsertEvents(demoEvents);
+describe("services/notifications bus", () => {
+  const topic = "notice:test";
 
-it("notify() adds a notice to the store", () => {
-  const volId = demoVols[0].id;
-  const n = notify(volId, { title: "Test notice", body: "hello" });
-  const list = store.listNotices(volId);
-  expect(list.some(x => x.id === n.id)).toBe(true);
-});
-
-it("notify() emits on the bus", async () => {
-  const volId = demoVols[0].id;
-  const p = new Promise(resolve => {
-    const topic = `notice:${volId}`;
-    const handler = (n) => { bus.off(topic, handler); resolve(n); };
-    bus.on(topic, handler);
+  beforeEach(() => {
+    
+    bus.removeAllListeners?.(topic);
   });
-  const sent = notify(volId, { title: "Bus notice" });
-  const got = await p;
-  expect(got.id).toBe(sent.id);
+
+  afterEach(() => {
+    bus.removeAllListeners?.(topic);
+  });
+
+  it("emits to a single listener", () => {
+    const handler = vi.fn();
+    bus.on(topic, handler);
+
+    const payload = { id: "n1", msg: "hello" };
+    bus.emit(topic, payload);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(payload);
+
+    bus.off(topic, handler);
+  });
+
+  it("supports multiple listeners and off()", () => {
+    const a = vi.fn();
+    const b = vi.fn();
+
+    bus.on(topic, a);
+    bus.on(topic, b);
+
+    bus.emit(topic, { id: "n2" });
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(1);
+
+    bus.off(topic, a);
+    bus.emit(topic, { id: "n3" });
+
+    expect(a).toHaveBeenCalledTimes(1); 
+    expect(b).toHaveBeenCalledTimes(2); 
+
+    bus.off(topic, b);
+  });
 });

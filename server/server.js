@@ -10,7 +10,7 @@ import { profile } from "./routes/profile.js";
 import { auth } from "./routes/auth.js";
 import { startReminders } from "./services/notifications.js";
 
-import { store } from "./store.memory.js";
+import { store } from "./store.memory.DEAD.js";
 import { demoVols, demoEvents } from "./demo_data/volunteer_events.data.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,10 +22,7 @@ export async function buildApp() {
   const app = express();
   app.use(express.json());
 
-  // seed before routes
-  store.upsertVolunteers(demoVols);
-  store.upsertEvents(demoEvents);
-
+  
   // mount APIs
   app.use("/api", api);                              // /api/events, /api/volunteer-history
   app.use("/api/match", matching);                   // /api/match/...
