@@ -12,13 +12,11 @@ import {
   resetVolunteerHistory,
 } from "./volunteerHistory.prisma.js";
 
-// 🔒 Import the authentication middleware
 import { auth } from "../routes/middleware/authenticate.js";
 
 const router = Router();
 
-// 🔒 Protect ALL routes in this router
-router.use(auth);
+// router.use(auth);
 
 const handleSuccess = (res, data, status = 200) => {
   res.status(status).json({ data });
