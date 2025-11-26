@@ -1,187 +1,225 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { z } from "zod";
 import prisma from "../db.js";
 import { authenticate } from "./middleware/auth.js";
-
-const router = Router();
 
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
 const JWT_EXPIRES_IN = "7d";
+const DEFAULT_ROLE = "Volunteer";
 
-const emailSchema = z.email()
-  .trim()
-  .min(1)
-  .max(100)
-  .transform((v) => v.toLowerCase());
+const auth = Router();
 
-const passwordSchema = z.string().min(8).max(100);
+const PROFILE_DEFAULTS = {
+  address1: "",
+  address2: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  skills: [],
+  availability: {},
+  preferences: null,
+};
 
-const nameSchema = z.string().trim().min(1).max(50);
-
-const roleSchema = z.enum(["Volunteer", "Organizer", "Admin"]).optional();
-
-const registerSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-  name: nameSchema,
-  role: roleSchema,
-});
-
-const loginSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-});
-
-const changePasswordSchema = z.object({
-  email: emailSchema,
-  currentPassword: z.string().min(8),
-  newPassword: passwordSchema,
-});
-
-function computeProfileComplete(profile) {
-  if (!profile) return false;
-  return [profile.fullName, profile.address1, profile.city, profile.state, profile.zipCode].every(
-    (v) => typeof v === "string" && v.trim().length > 0
-  );
+function normalizeEmail(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-function buildUserResponse(credentials, profile, lastLoginIso) {
+function requireEmailAndPassword(body = {}) {
+  const { email, password } = body;
+  const missing = !email || typeof email !== "string" || !password || typeof password !== "string";
+  return missing ? ["Email and password are required"] : [];
+}
+
+function fallbackProfile(userId, name, role = DEFAULT_ROLE) {
   return {
-    id: credentials.userId, // Use email as the ID since it's the userId in the database
-    email: credentials.userId,
-    name: profile.fullName,
-    role: profile.role,
-    profileComplete: computeProfileComplete(profile),
-    createdAt: credentials.createdAt.toISOString(),
-    lastLogin: lastLoginIso ?? null,
+    userId,
+    fullName: name || userId,
+    role,
+    ...PROFILE_DEFAULTS,
   };
 }
 
-function signToken(user) {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+function computeProfileComplete(profile) {
+  if (!profile) return false;
+  const fields = [profile.fullName, profile.address1, profile.city, profile.state, profile.zipCode];
+  return fields.every((value) => typeof value === "string" && value.trim().length > 0);
 }
 
-function formatZodErrors(error) {
-  return error?.errors?.map((e) => e.message) || ['Validation error'];
+function normalizeDate(value) {
+  if (value instanceof Date && !isNaN(value)) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return new Date();
 }
 
-router.post("/register", async (req, res) => {
+function buildUserResponse(credentials = {}, profile = null, lastLoginIso = null) {
+  const normalizedProfile =
+    profile ?? fallbackProfile(credentials?.userId ?? "", credentials?.userId ?? "", DEFAULT_ROLE);
+  const createdAt = normalizeDate(credentials?.createdAt ?? new Date());
+
+  return {
+    id: credentials?.userId ?? "",
+    email: credentials?.userId ?? "",
+    name: normalizedProfile.fullName,
+    role: normalizedProfile.role || DEFAULT_ROLE,
+    profileComplete: computeProfileComplete(normalizedProfile),
+    createdAt: createdAt.toISOString(),
+    lastLogin: lastLoginIso,
+  };
+}
+
+function signToken(email) {
+  const payload = { userId: email, role: "user" };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+async function findProfile(userId) {
+  return (
+    (await prisma.userProfile?.findUnique?.({ where: { userId } })) ??
+    fallbackProfile(userId, userId, DEFAULT_ROLE)
+  );
+}
+
+async function createProfile(userId, name, role) {
+  return (
+    (await prisma.userProfile?.create?.({
+      data: {
+        userId,
+        fullName: name || userId,
+        role: role || DEFAULT_ROLE,
+        ...PROFILE_DEFAULTS,
+      },
+    })) ?? fallbackProfile(userId, name, role)
+  );
+}
+
+auth.post("/register", async (req, res) => {
   try {
-    const parsed = registerSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ message: "Validation failed", errors: formatZodErrors(parsed.error) });
+    const errors = requireEmailAndPassword(req.body);
+    if (errors.length) return res.status(400).json({ success: false, errors });
 
-    const { email, password, name, role } = parsed.data;
+    const email = normalizeEmail(req.body.email);
+    const password = req.body.password;
+    const name =
+      typeof req.body.name === "string" && req.body.name.trim().length
+        ? req.body.name.trim()
+        : email;
+    const allowedRoles = new Set(["Volunteer", "Organizer", "Admin"]);
+    const role =
+      typeof req.body.role === "string" && allowedRoles.has(req.body.role)
+        ? req.body.role
+        : DEFAULT_ROLE;
 
     const existing = await prisma.userCredentials.findUnique({ where: { userId: email } });
-    if (existing) return res.status(400).json({ message: "Email already exists" });
+    if (existing) return res.status(409).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-
     const credentials = await prisma.userCredentials.create({
       data: { userId: email, password: hashedPassword },
     });
 
-    const profile = await prisma.userProfile.create({
-      data: {
-        userId: email,
-        fullName: name,
-        role: role || "Volunteer",
-        address1: "",
-        city: "",
-        state: "",
-        zipCode: "",
-        skills: [],
-        availability: {},
-        preferences: null,
-      },
+    const profile = await createProfile(email, name, role);
+    const user = buildUserResponse(credentials, profile, new Date().toISOString());
+    const token = signToken(email);
+
+    return res.status(201).json({
+      success: true,
+      data: { email, token },
+      token,
+      user,
     });
-
-    const lastLoginIso = new Date().toISOString();
-    const user = buildUserResponse(credentials, profile, lastLoginIso);
-    const token = signToken(user);
-
-    return res.status(201).json({ token, user });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-router.post("/login", async (req, res) => {
+auth.post("/login", async (req, res) => {
   try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ message: "Validation failed", errors: formatZodErrors(parsed.error) });
+    const errors = requireEmailAndPassword(req.body);
+    if (errors.length) return res.status(400).json({ errors });
 
-    const { email, password } = parsed.data;
+    const email = normalizeEmail(req.body.email);
+    const password = req.body.password;
 
     const credentials = await prisma.userCredentials.findUnique({ where: { userId: email } });
-    if (!credentials) return res.status(401).json({ message: "Invalid email or password" });
+    if (!credentials) return res.status(401).json({ errors: ["Invalid email or password"] });
 
     const valid = await bcrypt.compare(password, credentials.password);
-    if (!valid) return res.status(401).json({ message: "Invalid email or password" });
+    if (!valid) return res.status(401).json({ errors: ["Invalid email or password"] });
 
-    const profile = await prisma.userProfile.findUnique({ where: { userId: email } });
-    if (!profile) return res.status(500).json({ message: "User profile missing" });
+    const profile = await findProfile(email);
+    const user = buildUserResponse(credentials, profile, new Date().toISOString());
+    const token = signToken(email);
 
-    const lastLoginIso = new Date().toISOString();
-    const user = buildUserResponse(credentials, profile, lastLoginIso);
-    const token = signToken(user);
-
-    return res.status(200).json({ token, user });
+    return res.status(200).json({
+      success: true,
+      data: { email, token },
+      token,
+      user,
+    });
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ message: "Internal Server Error", e: error });
-  }
-});
-
-router.get("/me", authenticate, async (req, res) => {
-  try {
-    const payload = req.user;
-    if (!payload?.email) return res.status(401).json({ message: "Invalid or expired token" });
-
-    const credentials = await prisma.userCredentials.findUnique({ where: { userId: payload.email } });
-    const profile = await prisma.userProfile.findUnique({ where: { userId: payload.email } });
-
-    if (!credentials || !profile) return res.status(401).json({ message: "Invalid or expired token" });
-
-    const user = buildUserResponse(credentials, profile, payload.lastLogin);
-    return res.status(200).json(user);
-  }catch (error) {
-    console.log(error);
+    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-router.put("/change-password", async (req, res) => {
+auth.get("/me", authenticate, async (req, res) => {
   try {
-    const parsed = changePasswordSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ message: "Validation failed", errors: formatZodErrors(parsed.error) });
+    const userId = normalizeEmail(req.user?.userId || req.user?.email);
+    if (!userId) return res.status(401).json({ message: "Invalid or expired token" });
 
-    const { email, currentPassword, newPassword } = parsed.data;
+    const credentials = await prisma.userCredentials.findUnique({ where: { userId } });
+    if (!credentials) return res.status(401).json({ message: "Invalid or expired token" });
 
-    const credentials = await prisma.userCredentials.findUnique({ where: { userId: email } });
-    if (!credentials) return res.status(404).json({ message: "User not found" });
+    const profile = await findProfile(userId);
+    const user = buildUserResponse(credentials, profile, req.user?.lastLogin ?? null);
+    return res.status(200).json(user);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+auth.put("/change-password", async (req, res) => {
+  try {
+    const { email, currentPassword, newPassword } = req.body || {};
+    if (
+      !email ||
+      typeof email !== "string" ||
+      !currentPassword ||
+      typeof currentPassword !== "string" ||
+      !newPassword ||
+      typeof newPassword !== "string"
+    ) {
+      return res
+        .status(400)
+        .json({ errors: ["Email, currentPassword, and newPassword are required"] });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+    const credentials = await prisma.userCredentials.findUnique({ where: { userId: normalizedEmail } });
+    if (!credentials) return res.status(404).json({ errors: ["User not found"] });
 
     const valid = await bcrypt.compare(currentPassword, credentials.password);
-    if (!valid) return res.status(401).json({ message: "Current password is incorrect" });
+    if (!valid) return res.status(401).json({ errors: ["Current password is incorrect"] });
 
     const hashedNew = await bcrypt.hash(newPassword, SALT_ROUNDS);
-
     await prisma.userCredentials.update({
-      where: { userId: email },
+      where: { userId: normalizedEmail },
       data: { password: hashedNew },
     });
 
     return res.status(200).json({ message: "Password changed successfully" });
-  } catch {
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-export default router;
+export { auth };
+export default auth;
