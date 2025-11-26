@@ -16,15 +16,37 @@ import ManageUsers from './pages/ManageUsers.tsx';
 import Reports from './pages/Reports.tsx';
 import { NotificationProvider } from "./components/NotificationProvider.tsx";
 import { ToastProvider } from "./components/ToastProvider.tsx";
-import { AuthProvider } from "./contexts/AuthContext.simple.tsx";
+import { AuthProvider, useAuth } from "./contexts/AuthContext.tsx";
+
+function LayoutContent() {
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Volunteer Management System</h2>
+          <p className="text-gray-600">Verifying authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <RoleBasedHeader />
+      <Outlet />
+    </>
+  );
+}
 
 function Layout() {
   return (
     <AuthProvider>
       <ToastProvider>
         <NotificationProvider>
-          <RoleBasedHeader />
-          <Outlet />
+          <LayoutContent />
         </NotificationProvider>
       </ToastProvider>
     </AuthProvider>
@@ -41,6 +63,7 @@ const router = createBrowserRouter([
       { path: "/find-events", element: <FindEvents /> },
       { path: "/volunteer-matching", element: <VolunteerMatching /> },
       { path: "/profile-page", element: <ProfilePage/>},
+      { path: "/profile", element: <ProfilePage/>},
       { path: "/login", element: <Login />},
       { path: "/register", element: <Register />},
       { path: "/event-manage", element:<EventManage/>},

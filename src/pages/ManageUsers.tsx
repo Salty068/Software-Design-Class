@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext.simple.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 interface User {
   id: string;
@@ -23,6 +23,8 @@ export default function ManageUsers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'volunteer' | 'admin'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'pending'>('all');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
 
   useEffect(() => {
     requireAdmin();
@@ -35,28 +37,38 @@ export default function ManageUsers() {
       setError(null);
 
       // Fetch user profiles from the API
-      const response = await fetch('/api/profile');
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      const response = await fetch('/api/profile', { headers });
       
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }
 
       const data = await response.json();
+      console.log('Raw API response:', data);
+      console.log('Profiles from API:', data.data);
       
       // Transform the profile data to user format
-      const transformedUsers = data.data?.map((profile: any, index: number) => ({
-        id: profile.userId || `user-${index}`,
-        userId: profile.userId,
-        fullName: profile.fullName,
-        email: `${profile.userId}@example.com`, // Simulate email
-        role: profile.userId?.includes('admin') ? 'admin' : 'volunteer',
-        city: profile.city || 'Unknown',
-        state: profile.state || 'TX',
-        skills: profile.skills || [],
-        availability: profile.availability || [],
-        createdAt: profile.createdAt || new Date().toISOString(),
-        status: 'active' as const
-      })) || [];
+      const transformedUsers = data.data?.map((profile: any, index: number) => {
+        console.log('Processing profile:', profile);
+        const user = {
+          id: profile.userId || `user-${index}`,
+          userId: profile.userId,
+          fullName: profile.fullName,
+          email: profile.userId, // Use the actual email (userId is email)
+          role: profile.role?.toLowerCase() || 'volunteer', // Use actual role from database
+          city: profile.location?.city || 'Unknown',
+          state: profile.location?.state || 'TX',
+          skills: profile.skills || [],
+          availability: profile.availability || [],
+          createdAt: profile.createdAt || new Date().toISOString(),
+          status: 'active' as const
+        };
+        console.log('Transformed user:', user);
+        return user;
+      }) || [];
 
       setUsers(transformedUsers);
     } catch (err) {
@@ -90,8 +102,18 @@ export default function ManageUsers() {
       // In a real app, you would make an API call here
       console.log(`Updated user ${userId} status to ${newStatus}`);
     } catch (err) {
-      console.error('Error updating user status:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update status');
     }
+  };
+
+  const handleViewUser = (user: User) => {
+    setSelectedUser(user);
+    setShowUserProfile(true);
+  };
+
+  const closeUserProfile = () => {
+    setSelectedUser(null);
+    setShowUserProfile(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -324,14 +346,11 @@ export default function ManageUsers() {
                           {new Date(user.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button className="text-orange-600 hover:text-orange-700 mr-3">
-                            View
-                          </button>
-                          <button className="text-blue-600 hover:text-blue-700 mr-3">
-                            Edit
-                          </button>
-                          <button className="text-red-600 hover:text-red-700">
-                            Delete
+                          <button 
+                            onClick={() => handleViewUser(user)}
+                            className="inline-flex items-center px-3 py-2 text-sm bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 text-orange-800 hover:text-orange-900 rounded-lg border border-orange-200 transition-all duration-200 font-medium"
+                          >
+                            👁️ View Profile
                           </button>
                         </td>
                       </tr>
@@ -343,6 +362,166 @@ export default function ManageUsers() {
           </div>
         </div>
       </div>
+
+      {/* User Profile Modal */}
+      {showUserProfile && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">User Profile</h2>
+                <button 
+                  onClick={closeUserProfile}
+                  className="text-white hover:text-orange-200 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Basic Information */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2">
+                  Basic Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Full Name</label>
+                    <p className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-md">
+                      {selectedUser.fullName}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Email</label>
+                    <p className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-md">
+                      {selectedUser.email}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">User ID</label>
+                    <p className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-md font-mono">
+                      {selectedUser.userId}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Role</label>
+                    <p className="mt-1">
+                      <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getRoleColor(selectedUser.role)}`}>
+                        {selectedUser.role}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Location Information */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2">
+                  Location
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">City</label>
+                    <p className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-md">
+                      {selectedUser.city}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">State</label>
+                    <p className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-md">
+                      {selectedUser.state}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2">
+                  Status
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Current Status</label>
+                    <p className="mt-1">
+                      <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(selectedUser.status)}`}>
+                        {selectedUser.status}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Joined Date</label>
+                    <p className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-md">
+                      {new Date(selectedUser.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Skills */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2">
+                  Skills
+                </h3>
+                {selectedUser.skills.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedUser.skills.map((skill, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex px-3 py-1 text-sm bg-orange-100 text-orange-800 rounded-md font-medium"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic bg-gray-50 px-3 py-2 rounded-md">
+                    No skills listed
+                  </p>
+                )}
+              </div>
+
+              {/* Availability */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-200 pb-2">
+                  Availability
+                </h3>
+                {selectedUser.availability.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedUser.availability.map((time, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-md font-medium"
+                      >
+                        {time}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic bg-gray-50 px-3 py-2 rounded-md">
+                    No availability information
+                  </p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end pt-4 border-t border-gray-200">
+                <button 
+                  onClick={closeUserProfile}
+                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

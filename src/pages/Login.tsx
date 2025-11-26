@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ChangeEvent, FormEvent } from 'react';
-import { useAuth } from '../contexts/AuthContext.simple.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 type LoginForm = { email: string; password: string };
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ChangeEvent, FormEvent } from 'react';
-import { useAuth } from '../contexts/AuthContext.simple.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 type Role = 'volunteer' | 'organizer' | 'admin';
 type RegisterForm = { name: string; email: string; password: string; role: Role };
@@ -39,8 +39,14 @@ export default function Register() {
       const success = await register(form.email, form.password, form.name, form.role as 'volunteer' | 'admin');
       
       if (success) {
-        // Navigate to home page after successful registration
-        navigate('/');
+        // Redirect based on user role
+        if (form.role === 'admin') {
+          // Admins go straight to admin dashboard
+          navigate('/');
+        } else {
+          // Volunteers/organizers go to profile page to complete their profile
+          navigate('/profile');
+        }
       } else {
         setError('Registration failed. Please try again.');
       }

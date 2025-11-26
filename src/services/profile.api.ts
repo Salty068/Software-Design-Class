@@ -28,7 +28,18 @@ export interface ProfileResponse {
 
 async function requestJson(url: string, options?: RequestInit): Promise<ProfileResponse> {
   try {
-    const response = await fetch(url, options);
+    // Add authentication headers
+    const token = localStorage.getItem('authToken');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(options?.headers || {})
+    };
+    
+    const response = await fetch(url, {
+      ...options,
+      headers
+    });
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
@@ -69,7 +80,6 @@ export function getProfile(userId: string): Promise<ProfileResponse> {
 export function createProfile(userId: string, profileData: ProfileData): Promise<ProfileResponse> {
   return requestJson(`${API_BASE_URL}/${encodeURIComponent(userId)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(profileData),
   });
 }
@@ -77,7 +87,6 @@ export function createProfile(userId: string, profileData: ProfileData): Promise
 export function updateProfile(userId: string, profileData: Partial<ProfileData>): Promise<ProfileResponse> {
   return requestJson(`${API_BASE_URL}/${encodeURIComponent(userId)}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(profileData),
   });
 }

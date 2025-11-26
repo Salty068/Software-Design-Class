@@ -4,6 +4,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { getProfile, createProfile, updateProfile } from "../services/profile.api";
 import type { ProfileData } from "../services/profile.api";
 import { useToast } from "../components/ToastProvider";
+import { useAuth } from "../contexts/AuthContext";
 
 // Custom CSS for DatePicker to match theme
 const datePickerStyles = `
@@ -93,8 +94,22 @@ const datePickerStyles = `
 `;
 
 export default function ProfilePage() {
-  const userId = 'user123';
+  const { user } = useAuth();
   const toast = useToast();
+  
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Loading Profile</h2>
+          <p className="text-gray-600">Please wait while we load your information...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const userId = user.id;
   
   const [activeTab, setActiveTab] = useState<'edit' | 'summary'>('edit');
   const [name, setName] = useState('');
@@ -108,6 +123,8 @@ export default function ProfilePage() {
   const [availability, setAvailability] = useState<Date[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
  
   const availableSkills = [
@@ -153,8 +170,10 @@ export default function ProfilePage() {
 
  
   useEffect(() => {
-    loadProfileData();
-  }, []);
+    if (userId) {
+      loadProfileData();
+    }
+  }, [userId]);
 
   const loadProfileData = async () => {
     setIsLoading(true);
@@ -162,25 +181,49 @@ export default function ProfilePage() {
       const response = await getProfile(userId);
       
       if (response.success && response.data) {
-        
+        // Profile exists, populate the form with existing data
+        console.log('Profile loaded successfully:', response.data);
         setName(response.data.fullName);
         setAddress1(response.data.location.address1);
         setAddress2(response.data.location.address2 || '');
         setCity(response.data.location.city);
         setState(response.data.location.state);
         setZip(response.data.location.zipCode);
-        setSkills(response.data.skills);
+        setSkills(response.data.skills || []);
         setPreference(response.data.preferences || '');
         
+        // Handle availability - check if it's an array or object and validate dates
+        if (Array.isArray(response.data.availability)) {
+          const validDates = response.data.availability
+            .map((day: string) => new Date(day))
+            .filter((date: Date) => !isNaN(date.getTime())); // Filter out invalid dates
+          setAvailability(validDates);
+        } else {
+          setAvailability([]);
+        }
         
-        setAvailability(response.data.availability.map((day: string) => new Date(day)));
+        // Check if this is a new user (profile exists but is empty/incomplete)
+        const isEmpty = !response.data.location.address1 || 
+                       !response.data.location.city || 
+                       !response.data.location.state || 
+                       !response.data.location.zipCode ||
+                       !response.data.skills ||
+                       response.data.skills.length === 0;
         
+        setIsNewUser(isEmpty);
         setProfileExists(true);
+        setProfileLoaded(true);
+        console.log('Profile exists set to:', true, 'IsNewUser:', isEmpty);
       } else {
+        // Profile doesn't exist yet
+        console.log('Profile not found, response:', response);
         setProfileExists(false);
+        setIsNewUser(false);
+        setProfileLoaded(true);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+      setProfileLoaded(true);
     } finally {
       setIsLoading(false);
     }
@@ -189,6 +232,11 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Ensure profile data is loaded before submitting
+    if (!profileLoaded) {
+      toast.error('Profile is still loading. Please wait a moment.');
+      return;
+    }
     
     if (!name.trim()) {
       toast.error('Please enter your name.');
@@ -249,16 +297,22 @@ export default function ProfilePage() {
     try {
       let response;
       
+      console.log('Submitting profile, profileExists:', profileExists, 'userId:', userId);
       if (profileExists) {
-        
+        console.log('Using UPDATE profile');
         response = await updateProfile(userId, profileData);
       } else {
-        
+        console.log('Using CREATE profile');
         response = await createProfile(userId, profileData);
       }
 
       if (response.success) {
-        toast.success('Profile saved successfully!');
+        if (isNewUser) {
+          toast.success('🎉 Welcome! Your profile has been completed. You can now start browsing volunteer opportunities!');
+          setIsNewUser(false);
+        } else {
+          toast.success('Profile updated successfully!');
+        }
         setProfileExists(true);
         setActiveTab('summary'); 
       } else {
@@ -325,6 +379,26 @@ return (
               </div>
             </div>
           </div>
+
+        {/* Welcome Message for New Users */}
+        {isNewUser && !isLoading && (
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 mx-4 my-4 rounded-xl shadow-lg border border-orange-400">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C20.832 18.477 19.246 18 17.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold mb-2">🎉 Welcome to Our Volunteer Community!</h2>
+                <p className="text-orange-100 text-sm leading-relaxed">
+                  Complete your profile below to start receiving personalized volunteer opportunities. 
+                  Add your skills, location, and availability to get matched with the perfect opportunities in your area.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Tabs */}
         <div className="relative flex bg-gradient-to-r from-orange-50 to-orange-100 px-2 pt-2" style={{ backgroundColor: '#f5efe6' }}>
@@ -591,7 +665,7 @@ return (
             <p className="text-xs text-gray-600 mb-3">Click on dates to select/deselect your availability. Selected dates will be highlighted in yellow.</p>
             <div className="bg-white rounded-lg border border-orange-200 p-3">
               <DatePicker
-                selected={availability.length > 0 ? availability[0] : null}
+                selected={availability.length > 0 && !isNaN(availability[0].getTime()) ? availability[0] : null}
                 onChange={(date: Date | null) => {
                   if (date) {
                     const dateExists = availability.some(d => d.getTime() === date.getTime());

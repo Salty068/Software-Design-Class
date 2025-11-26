@@ -13,6 +13,7 @@ const mapHistory = (row) => {
   const extra = parseFeedback(row.feedback);
   return {
     id: row.id,
+    eventId: row.eventId,
     volunteerId: row.userId,
     volunteerName: extra.volunteerName || "",
     assignment: extra.assignment || "",
