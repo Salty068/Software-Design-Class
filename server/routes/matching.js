@@ -130,18 +130,22 @@ matching.post("/assign", async (req, res) => {
         // success notice for SSE consumers
         const title = `Assigned: ${e.eventName}`;
         const body = `${e.location} • ${new Date(e.eventDate).toISOString()}`;
-        const notice = await prisma.notice.create({ data: { volunteerId, title, body, type: "success" } });
         
-        // Only emit if bus is available
-        if (typeof bus !== 'undefined') {
-          bus.emit(`notice:${volunteerId}`, {
-            id: notice.id,
-            volunteerId: notice.volunteerId,
-            title: notice.title,
-            body: notice.body,
-            type: notice.type,
-            createdAtMs: Number(notice.createdAtMs ?? 0n),
-          });
+        // Check if notice table exists before creating notice
+        if (prisma.notice) {
+          const notice = await prisma.notice.create({ data: { volunteerId, title, body, type: "success" } });
+          
+          // Only emit if bus is available and has emit method
+          if (bus && typeof bus.emit === 'function') {
+            bus.emit(`notice:${volunteerId}`, {
+              id: notice.id,
+              volunteerId: notice.volunteerId,
+              title: notice.title,
+              body: notice.body,
+              type: notice.type,
+              createdAtMs: Number(notice.createdAtMs ?? 0n),
+            });
+          }
         }
       } catch (noticeError) {
         // Don't fail the assignment if notice creation fails

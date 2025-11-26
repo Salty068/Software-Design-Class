@@ -406,12 +406,18 @@ profile.post("/:userId", conditionalAuth, async (req, res) => {
       }
     });
 
-    // Note: Volunteer sync disabled as it uses deprecated store system
-    // try {
-    //   syncVolunteerFromProfile(normalized);
-    // } catch (syncError) {
-    //   console.warn('Warning: Failed to sync volunteer data, but profile was created successfully:', syncError);
-    // }
+    // Sync volunteer data to store for test compatibility
+    try {
+      await store.upsertVolunteers([{
+        id: normalized.userId,
+        name: normalized.fullName,
+        skills: normalized.skills || [],
+        location: normalized.location?.city || '',
+        availability: normalized.availability || []
+      }]);
+    } catch (syncError) {
+      console.warn('Warning: Failed to sync volunteer data, but profile was created successfully:', syncError);
+    }
 
     const formattedProfile = {
       userId: newProfile.userId,
@@ -608,12 +614,18 @@ profile.put("/:userId", conditionalAuth, async (req, res) => {
       availability: updatedProfile.availability,
     };
 
-    // Note: Volunteer sync disabled as it uses deprecated store system
-    // try {
-    //   syncVolunteerFromProfile(normalized);
-    // } catch (syncError) {
-    //   console.warn('Warning: Failed to sync volunteer data, but profile was updated successfully:', syncError);
-    // }
+    // Sync volunteer data to store for test compatibility
+    try {
+      await store.upsertVolunteers([{
+        id: normalized.userId,
+        name: normalized.fullName,
+        skills: normalized.skills || [],
+        location: normalized.location?.city || '',
+        availability: normalized.availability || []
+      }]);
+    } catch (syncError) {
+      console.warn('Warning: Failed to sync volunteer data, but profile was updated successfully:', syncError);
+    }
 
     res.status(200).json({ success: true, message: "Profile updated successfully", data: normalized });
   } catch (error) {

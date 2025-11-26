@@ -19,9 +19,6 @@ export default function FindEvents() {
   const { user, requireAuth } = useAuth();
   const notify = useNotify();
   
-  // Debug: Log user info
-  console.log('Current user:', user);
-  
   // Track cancelled events in localStorage to persist across page reloads
   const getCancelledEvents = () => {
     try {
@@ -111,20 +108,10 @@ export default function FindEvents() {
       // Process volunteer history (self sign-ups)
       if (historyResponse.ok) {
         const historyData = await historyResponse.json();
-        console.log('Raw history data from API:', historyData);
-        
         // Handle different data structures - check for nested items array
         const historyArray = historyData.data?.items || historyData.data || historyData || [];
-        console.log('History array:', historyArray);
         
         const historyEvents = Array.isArray(historyArray) ? historyArray.map((history: any) => {
-          console.log('Processing history item:', {
-            eventId: history.eventId,
-            eventName: history.eventName,
-            rawStatus: history.status,
-            participationStatus: history.participationStatus
-          });
-          
           // The API maps participationStatus to status field, so use status directly
           const statusField = history.status;
           
@@ -150,23 +137,7 @@ export default function FindEvents() {
           };
         }) : [];
         
-        console.log('Mapped history events:', historyEvents);
-        
-        // Filter out any events that have inconsistent status (this is a safeguard)
-        const validHistoryEvents = historyEvents.filter(event => {
-          if (event.name?.toLowerCase().includes('tutor')) {
-            const originalItem = historyArray.find((h: any) => h.eventId === event.id);
-            console.log('Tutor event status check:', {
-              name: event.name,
-              status: event.status,
-              originalStatus: originalItem?.status,
-              originalParticipationStatus: originalItem?.participationStatus
-            });
-          }
-          return true; // Keep all events for now, just log for debugging
-        });
-        
-        myEventsData = [...myEventsData, ...validHistoryEvents];
+        myEventsData = [...myEventsData, ...historyEvents];
       }
 
       // Process admin assignments
@@ -192,13 +163,6 @@ export default function FindEvents() {
 
       // Remove duplicates with smart status handling
       // If an event appears multiple times, prioritize cancelled status over others
-      console.log('All myEventsData before duplicate removal:', myEventsData.map(e => ({
-        id: e.id,
-        name: e.name,
-        status: e.status,
-        source: e.source
-      })));
-      
       const eventMap = new Map();
       
       myEventsData.forEach(event => {
@@ -206,31 +170,20 @@ export default function FindEvents() {
         
         if (!existingEvent) {
           // First occurrence, add it
-          console.log(`Adding first occurrence: ${event.name} (${event.source}) with status ${event.status}`);
           eventMap.set(event.id, event);
         } else {
           // Duplicate found - prioritize cancelled status
-          console.log(`Duplicate found for ${event.name}:`, {
-            existing: { status: existingEvent.status, source: existingEvent.source },
-            new: { status: event.status, source: event.source }
-          });
-          
           if (event.status?.toLowerCase() === 'cancelled') {
-            console.log(`Prioritizing cancelled status for event ${event.name} (ID: ${event.id})`);
             eventMap.set(event.id, event);
           } else if (existingEvent.status?.toLowerCase() === 'cancelled') {
-            console.log(`Keeping existing cancelled status for event ${event.name} (ID: ${event.id})`);
             // Keep the existing cancelled one, don't replace
           } else {
             // Neither is cancelled, keep the first one
-            console.log(`Keeping first occurrence for event ${event.name} (ID: ${event.id})`);
           }
         }
       });
       
       const uniqueEvents = Array.from(eventMap.values());
-      console.log('Final unique events:', uniqueEvents);
-
       setMyEvents(uniqueEvents);
     } catch (err) {
       console.error('Error fetching my events:', err);
@@ -391,8 +344,6 @@ export default function FindEvents() {
         eventId: eventId
       };
       
-      console.log('Sending cancel request with payload:', cancelPayload);
-      
       const response = await fetch(`/api/volunteer-history/cancel`, {
         method: 'POST',
         headers: {
@@ -412,11 +363,6 @@ export default function FindEvents() {
 
         // If it's already cancelled, treat it as success and update local state
         const errorMessage = errorData.message || errorData.error || '';
-        console.log('Checking error message for "already cancelled":', {
-          errorMessage,
-          includes: errorMessage.toLowerCase().includes('already cancelled')
-        });
-        
         if (errorMessage.toLowerCase().includes('already cancelled')) {
           console.log('Event already cancelled on backend, updating local state...');
           
@@ -505,15 +451,6 @@ export default function FindEvents() {
   });
 
   const filteredMyEvents = myEvents.filter(event => {
-    // Debug: Check for cancelled events
-    if (event.name?.toLowerCase().includes('tutor') || event.status?.toLowerCase() === 'cancelled') {
-      console.log('Filtering myEvents - Event:', {
-        name: event.name,
-        status: event.status,
-        willFilter: event.status?.toLowerCase() === 'cancelled'
-      });
-    }
-    
     // Exclude cancelled events from the list (they should appear in available events)
     // Handle both "cancelled" and "Cancelled" status values
     if (event.status?.toLowerCase() === 'cancelled') return false;
