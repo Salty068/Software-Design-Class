@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { score } from "../services/matching.js";
-import { bus } from "../services/notifications.js"; // for SSE notices
+import { bus } from "../services/notifications.js";
 
 export const matching = Router();
 const prisma = new PrismaClient();
@@ -124,38 +124,41 @@ matching.post("/assign", async (req, res) => {
 
     const assignment = await prisma.assignment.create({ data: { volunteerId, eventId } });
 
-    // Only create notifications in non-test environment
-    if (process.env.NODE_ENV !== 'test') {
-      try {
-        // success notice for SSE consumers
-        const title = `Assigned: ${e.eventName}`;
-        const body = `${e.location} • ${new Date(e.eventDate).toISOString()}`;
-        
-        // Check if notice table exists before creating notice
-        if (prisma.notice) {
-          const notice = await prisma.notice.create({ data: { volunteerId, title, body, type: "success" } });
-          
-          // Only emit if bus is available and has emit method
-          if (bus && typeof bus.emit === 'function') {
-            bus.emit(`notice:${volunteerId}`, {
-              id: notice.id,
-              volunteerId: notice.volunteerId,
-              title: notice.title,
-              body: notice.body,
-              type: notice.type,
-              createdAtMs: Number(notice.createdAtMs ?? 0n),
-            });
-          }
-        }
-      } catch (noticeError) {
-        // Don't fail the assignment if notice creation fails
-        console.warn('Failed to create assignment notice:', noticeError);
-      }
+    // Create notifications for SSE consumers
+    try {
+      const title = `Assigned: ${e.eventName}`;
+      const body = `${e.location} • ${new Date(e.eventDate).toISOString()}`;
+      
+      const notice = await prisma.notice.create({ 
+        data: { volunteerId, title, body, type: "success" } 
+      });
+      
+      // Emit notification through bus
+      bus.emit(`notice:${volunteerId}`, {
+        id: notice.id,
+        volunteerId: notice.volunteerId,
+        title: notice.title,
+        body: notice.body,
+        type: notice.type,
+        createdAtMs: Number(notice.createdAtMs ?? 0n),
+      });
+    } catch (noticeError) {
+      // Don't fail the assignment if notification fails, just log it
+      console.warn('Failed to create/emit notice:', noticeError.message);
     }
 
-    res.json({ ok: true, assignment: { id: assignment.id, volunteerId, eventId, createdAtMs: Number(assignment.createdAtMs ?? 0n) } });
-  } catch {
-    res.status(500).json({ error: "assign_failed" });
+    // Safely convert createdAtMs 
+    let createdAtMs = 0;
+    try {
+      createdAtMs = assignment.createdAtMs ? Number(assignment.createdAtMs) : Date.now();
+    } catch (conversionError) {
+      createdAtMs = Date.now();
+    }
+
+    res.json({ ok: true, assignment: { id: assignment.id, volunteerId, eventId, createdAtMs } });
+  } catch (error) {
+    console.error('Assignment creation failed:', error);
+    res.status(500).json({ error: "assign_failed", message: error.message });
   }
 });
 
