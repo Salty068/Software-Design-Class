@@ -12,11 +12,37 @@ interface Event {
   urgency: string;
   isMatched?: boolean;
   status?: 'available' | 'registered' | 'completed' | 'cancelled' | 'assigned' | 'CheckedIn';
+  source?: 'volunteer-history' | 'assignments';
 }
 
 export default function FindEvents() {
   const { user, requireAuth } = useAuth();
   const notify = useNotify();
+  
+  // Debug: Log user info
+  console.log('Current user:', user);
+  
+  // Track cancelled events in localStorage to persist across page reloads
+  const getCancelledEvents = () => {
+    try {
+      const cancelled = localStorage.getItem(`cancelled_events_${user?.id}`);
+      return cancelled ? JSON.parse(cancelled) : [];
+    } catch {
+      return [];
+    }
+  };
+  
+  const setCancelledEvent = (eventId: string) => {
+    try {
+      const cancelled = getCancelledEvents();
+      if (!cancelled.includes(eventId)) {
+        cancelled.push(eventId);
+        localStorage.setItem(`cancelled_events_${user?.id}`, JSON.stringify(cancelled));
+      }
+    } catch (error) {
+      console.error('Error storing cancelled event:', error);
+    }
+  };
   const [events, setEvents] = useState<Event[]>([]);
   const [myEvents, setMyEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +52,6 @@ export default function FindEvents() {
   const [signingUp, setSigningUp] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState<{ type: 'checkin' | 'cancel', eventId: string, eventName: string } | null>(null);
-  const [showCancelledEvents, setShowCancelledEvents] = useState(false);
 
   useEffect(() => {
     requireAuth();
@@ -70,15 +95,15 @@ export default function FindEvents() {
 
   const fetchMyEvents = async () => {
     try {
-      if (!user?.email) return;
+      if (!user?.id) return;
 
       // Fetch both volunteer history and admin assignments
       const token = localStorage.getItem('authToken');
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       
       const [historyResponse, assignmentsResponse] = await Promise.all([
-        fetch(`/api/volunteer-history?userId=${user.email}`, { headers }),
-        fetch(`/api/assignments?userId=${user.email}`, { headers })
+        fetch(`/api/volunteer-history?userId=${user.id}`, { headers }),
+        fetch(`/api/assignments?userId=${user.id}`, { headers })
       ]);
       
       let myEventsData: Event[] = [];
@@ -86,24 +111,62 @@ export default function FindEvents() {
       // Process volunteer history (self sign-ups)
       if (historyResponse.ok) {
         const historyData = await historyResponse.json();
-        // Handle different data structures
-        const historyArray = historyData.data || historyData || [];
+        console.log('Raw history data from API:', historyData);
         
-        const historyEvents = Array.isArray(historyArray) ? historyArray.map((history: any) => ({
-          id: history.eventId || history.id,
-          name: history.eventName || 'Event',
-          description: history.eventDescription || '',
-          location: history.location || 'TBD',
-          eventDate: history.eventDate,
-          requiredSkills: history.requiredSkills || [],
-          urgency: history.urgency || 'Medium',
-          status: (history.participationStatus === 'Completed' ? 'completed' : 
-                    history.participationStatus === 'Cancelled' ? 'cancelled' : 
-                    history.participationStatus === 'CheckedIn' ? 'CheckedIn' :
-                    'registered') as 'registered' | 'completed' | 'cancelled' | 'CheckedIn',
-          isMatched: true
-        })) : [];
-        myEventsData = [...myEventsData, ...historyEvents];
+        // Handle different data structures - check for nested items array
+        const historyArray = historyData.data?.items || historyData.data || historyData || [];
+        console.log('History array:', historyArray);
+        
+        const historyEvents = Array.isArray(historyArray) ? historyArray.map((history: any) => {
+          console.log('Processing history item:', {
+            eventId: history.eventId,
+            eventName: history.eventName,
+            rawStatus: history.status,
+            participationStatus: history.participationStatus
+          });
+          
+          // The API maps participationStatus to status field, so use status directly
+          const statusField = history.status;
+          
+          // Check if this event was cancelled by the user (stored in localStorage)
+          const cancelledEvents = getCancelledEvents();
+          const isCancelledByUser = cancelledEvents.includes(history.eventId);
+          
+          return {
+            id: history.eventId || history.id, // Prioritize eventId from updated backend
+            name: history.assignment || history.eventName || 'Event',
+            description: history.eventDescription || '',
+            location: history.location || 'TBD',
+            eventDate: history.eventDate,
+            requiredSkills: history.requiredSkills || [],
+            urgency: history.urgency || 'Medium',
+            status: (isCancelledByUser ? 'cancelled' :
+                      statusField === 'Completed' ? 'completed' : 
+                      statusField === 'Cancelled' ? 'cancelled' : 
+                      statusField === 'CheckedIn' ? 'CheckedIn' :
+                      'registered') as 'registered' | 'completed' | 'cancelled' | 'CheckedIn',
+            isMatched: true,
+            source: 'volunteer-history' as const // Track the source
+          };
+        }) : [];
+        
+        console.log('Mapped history events:', historyEvents);
+        
+        // Filter out any events that have inconsistent status (this is a safeguard)
+        const validHistoryEvents = historyEvents.filter(event => {
+          if (event.name?.toLowerCase().includes('tutor')) {
+            const originalItem = historyArray.find((h: any) => h.eventId === event.id);
+            console.log('Tutor event status check:', {
+              name: event.name,
+              status: event.status,
+              originalStatus: originalItem?.status,
+              originalParticipationStatus: originalItem?.participationStatus
+            });
+          }
+          return true; // Keep all events for now, just log for debugging
+        });
+        
+        myEventsData = [...myEventsData, ...validHistoryEvents];
       }
 
       // Process admin assignments
@@ -121,15 +184,52 @@ export default function FindEvents() {
           requiredSkills: assignment.requiredSkills || [],
           urgency: assignment.urgency || 'Medium',
           status: 'assigned' as 'assigned',
-          isMatched: true
+          isMatched: true,
+          source: 'assignments' as const // Track the source
         })) : [];
         myEventsData = [...myEventsData, ...assignmentEvents];
       }
 
-      // Remove duplicates (in case an event appears in both history and assignments)
-      const uniqueEvents = myEventsData.filter((event, index, self) => 
-        index === self.findIndex(e => e.id === event.id)
-      );
+      // Remove duplicates with smart status handling
+      // If an event appears multiple times, prioritize cancelled status over others
+      console.log('All myEventsData before duplicate removal:', myEventsData.map(e => ({
+        id: e.id,
+        name: e.name,
+        status: e.status,
+        source: e.source
+      })));
+      
+      const eventMap = new Map();
+      
+      myEventsData.forEach(event => {
+        const existingEvent = eventMap.get(event.id);
+        
+        if (!existingEvent) {
+          // First occurrence, add it
+          console.log(`Adding first occurrence: ${event.name} (${event.source}) with status ${event.status}`);
+          eventMap.set(event.id, event);
+        } else {
+          // Duplicate found - prioritize cancelled status
+          console.log(`Duplicate found for ${event.name}:`, {
+            existing: { status: existingEvent.status, source: existingEvent.source },
+            new: { status: event.status, source: event.source }
+          });
+          
+          if (event.status?.toLowerCase() === 'cancelled') {
+            console.log(`Prioritizing cancelled status for event ${event.name} (ID: ${event.id})`);
+            eventMap.set(event.id, event);
+          } else if (existingEvent.status?.toLowerCase() === 'cancelled') {
+            console.log(`Keeping existing cancelled status for event ${event.name} (ID: ${event.id})`);
+            // Keep the existing cancelled one, don't replace
+          } else {
+            // Neither is cancelled, keep the first one
+            console.log(`Keeping first occurrence for event ${event.name} (ID: ${event.id})`);
+          }
+        }
+      });
+      
+      const uniqueEvents = Array.from(eventMap.values());
+      console.log('Final unique events:', uniqueEvents);
 
       setMyEvents(uniqueEvents);
     } catch (err) {
@@ -147,6 +247,12 @@ export default function FindEvents() {
 
       setSigningUp(eventId);
 
+      // Find the event details
+      const event = events.find(e => e.id === eventId);
+      if (!event) {
+        throw new Error('Event not found');
+      }
+
       const response = await fetch('/api/volunteer-history', {
         method: 'POST',
         headers: {
@@ -154,9 +260,8 @@ export default function FindEvents() {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         },
         body: JSON.stringify({
-          userId: user.id,
-          eventId: eventId,
-          participationStatus: 'registered'
+          volunteerId: user.id,
+          eventId: eventId
         })
       });
 
@@ -165,8 +270,17 @@ export default function FindEvents() {
         throw new Error(errorData.message || 'Failed to sign up for event');
       }
 
-      // Show success message
-      alert('Successfully signed up for the event!');
+      await response.json(); // Consume response
+
+      // Show success notification
+      notify({ 
+        title: "✓ Successfully Registered!", 
+        body: `You've been signed up for "${event.name}". Check your registered events in My Matched Events.`, 
+        type: "success" 
+      });
+
+      // Add a small delay to ensure database update is complete
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Refresh both event lists to reflect the change
       await Promise.all([fetchEvents(), fetchMyEvents()]);
@@ -176,7 +290,11 @@ export default function FindEvents() {
 
     } catch (error) {
       console.error('Error signing up for event:', error);
-      alert(error instanceof Error ? error.message : 'Failed to sign up for event. Please try again.');
+      notify({ 
+        title: "Registration Failed", 
+        body: error instanceof Error ? error.message : 'Failed to sign up for event. Please try again.', 
+        type: "error" 
+      });
     } finally {
       setSigningUp(null);
     }
@@ -185,8 +303,21 @@ export default function FindEvents() {
   const handleCheckIn = async (eventId: string) => {
     if (!user?.id) return;
 
+    // Find the event to determine its source
+    const event = myEvents.find(e => e.id === eventId);
+    if (!event) {
+      notify({ 
+        title: "Error", 
+        body: "Event not found", 
+        type: "error" 
+      });
+      return;
+    }
+
     try {
       setActionLoading(eventId);
+      
+
       
       const response = await fetch(`/api/volunteer-history/checkin`, {
         method: 'POST',
@@ -195,7 +326,7 @@ export default function FindEvents() {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         },
         body: JSON.stringify({
-          userId: user.id,
+          volunteerId: user.id,
           eventId: eventId
         })
       });
@@ -228,8 +359,39 @@ export default function FindEvents() {
   const handleCancelAssignment = async (eventId: string) => {
     if (!user?.id) return;
 
+    // Find the event to determine its source
+    const event = myEvents.find(e => e.id === eventId);
+    if (!event) {
+      notify({ 
+        title: "Error", 
+        body: "Event not found", 
+        type: "error" 
+      });
+      return;
+    }
+
+    // Check if this is an admin assignment (can't be cancelled by user)
+    if (event.source === 'assignments') {
+      notify({ 
+        title: "Cannot Cancel", 
+        body: "This is an admin assignment and cannot be cancelled. Please contact an administrator.", 
+        type: "error" 
+      });
+      setShowConfirmModal(null);
+      return;
+    }
+
     try {
       setActionLoading(eventId);
+      
+
+      
+      const cancelPayload = {
+        volunteerId: user.id,
+        eventId: eventId
+      };
+      
+      console.log('Sending cancel request with payload:', cancelPayload);
       
       const response = await fetch(`/api/volunteer-history/cancel`, {
         method: 'POST',
@@ -237,10 +399,7 @@ export default function FindEvents() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         },
-        body: JSON.stringify({
-          userId: user.id,
-          eventId: eventId
-        })
+        body: JSON.stringify(cancelPayload)
       });
 
       if (!response.ok) {
@@ -250,16 +409,70 @@ export default function FindEvents() {
           statusText: response.statusText,
           errorData
         });
+
+        // If it's already cancelled, treat it as success and update local state
+        const errorMessage = errorData.message || errorData.error || '';
+        console.log('Checking error message for "already cancelled":', {
+          errorMessage,
+          includes: errorMessage.toLowerCase().includes('already cancelled')
+        });
+        
+        if (errorMessage.toLowerCase().includes('already cancelled')) {
+          console.log('Event already cancelled on backend, updating local state...');
+          
+          // Store in localStorage and update local state
+          setCancelledEvent(eventId);
+          setMyEvents(prevEvents => 
+            prevEvents.map(e => 
+              e.id === eventId 
+                ? { ...e, status: 'cancelled' as const }
+                : e
+            )
+          );
+          
+          notify({ 
+            title: "✓ Assignment Cancelled", 
+            body: "This event has been cancelled. Moving it back to available events.", 
+            type: "success" 
+          });
+          
+          // DON'T refresh from backend since it has stale data
+          // Just refresh events list and switch tab, keeping our local state update
+          await fetchEvents();
+          setActiveTab('available');
+          setActionLoading(null);
+          setShowConfirmModal(null);
+          return; // Exit early since we handled it
+        }
+
         throw new Error(errorData.message || errorData.error || `HTTP ${response.status}: Failed to cancel assignment`);
       }
 
+      // Check what the backend actually returned
+      const responseData = await response.json();
+      console.log('Cancel API Response:', responseData);
+
+      // Store in localStorage and immediately update the local state  
+      setCancelledEvent(eventId);
+      setMyEvents(prevEvents => 
+        prevEvents.map(e => 
+          e.id === eventId 
+            ? { ...e, status: 'cancelled' as const }
+            : e
+        )
+      );
+
       notify({ 
         title: "✗ Assignment Cancelled", 
-        body: "Your assignment has been cancelled successfully.", 
+        body: "Your assignment has been cancelled successfully. The event is now available for sign-up again.", 
         type: "success" 
       });
       
-      await fetchMyEvents(); // Refresh my events
+      // Only refresh events list, don't refresh myEvents to preserve local state update
+      await fetchEvents();
+      
+      // Switch to "Available Events" tab to show the event is available again
+      setActiveTab('available');
 
     } catch (error) {
       console.error('Error cancelling assignment:', error);
@@ -275,8 +488,14 @@ export default function FindEvents() {
   };
 
   const filteredEvents = events.filter(event => {
-    // First filter out events the user is already registered for
-    const isAlreadyRegistered = myEvents.some(myEvent => myEvent.id === event.id);
+    // First filter out events the user is already registered for (but allow cancelled events)
+    const isAlreadyRegistered = myEvents.some(myEvent => {
+      // Don't consider cancelled events as "registered" - they should appear in available
+      // Handle both "cancelled" and "Cancelled" status values
+      if (myEvent.status?.toLowerCase() === 'cancelled') return false;
+      return myEvent.id === event.id;
+    });
+    
     if (isAlreadyRegistered) return false;
     
     // Then apply search filter
@@ -286,10 +505,20 @@ export default function FindEvents() {
   });
 
   const filteredMyEvents = myEvents.filter(event => {
-    // First, exclude cancelled events from the list unless user wants to see them
-    if (event.status === 'cancelled' && !showCancelledEvents) return false;
+    // Debug: Check for cancelled events
+    if (event.name?.toLowerCase().includes('tutor') || event.status?.toLowerCase() === 'cancelled') {
+      console.log('Filtering myEvents - Event:', {
+        name: event.name,
+        status: event.status,
+        willFilter: event.status?.toLowerCase() === 'cancelled'
+      });
+    }
     
-    // Then apply search filter
+    // Exclude cancelled events from the list (they should appear in available events)
+    // Handle both "cancelled" and "Cancelled" status values
+    if (event.status?.toLowerCase() === 'cancelled') return false;
+    
+    // Apply search filter
     return event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
            event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
            event.requiredSkills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -592,19 +821,7 @@ export default function FindEvents() {
             {activeTab === 'my-events' && (
               <div>
                 <div className="mb-6">
-                  <div className="flex justify-between items-start mb-2">
-                    <h2 className="text-xl font-semibold text-gray-900">My Matched Events</h2>
-                    <button
-                      onClick={() => setShowCancelledEvents(!showCancelledEvents)}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                        showCancelledEvents
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {showCancelledEvents ? 'Hide' : 'Show'} Cancelled Events
-                    </button>
-                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">My Matched Events</h2>
                   <p className="text-gray-600">Events you've signed up for or been assigned to by administrators</p>
                 </div>
 
@@ -700,16 +917,35 @@ export default function FindEvents() {
                           ) : event.status === 'CheckedIn' ? (
                             <div className="flex items-center justify-between">
                               <span className="text-emerald-600 text-sm font-medium">✓ Checked In</span>
+                              {event.source === 'volunteer-history' ? (
+                                <button
+                                  onClick={() => setShowConfirmModal({
+                                    type: 'cancel',
+                                    eventId: event.id,
+                                    eventName: event.name
+                                  })}
+                                  disabled={actionLoading === event.id}
+                                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition-colors disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                              ) : (
+                                <span className="text-xs text-gray-500">Admin Assignment</span>
+                              )}
+                            </div>
+                          ) : event.source === 'assignments' ? (
+                            <div className="space-y-2">
+                              <span className="text-blue-600 text-sm font-medium">📋 Admin Assignment</span>
                               <button
                                 onClick={() => setShowConfirmModal({
-                                  type: 'cancel',
+                                  type: 'checkin',
                                   eventId: event.id,
                                   eventName: event.name
                                 })}
                                 disabled={actionLoading === event.id}
-                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition-colors disabled:opacity-50"
+                                className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                Cancel
+                                {actionLoading === event.id ? 'Processing...' : '✓ Check In'}
                               </button>
                             </div>
                           ) : (
