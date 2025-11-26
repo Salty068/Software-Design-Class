@@ -15,6 +15,10 @@ vi.mock("@prisma/client", () => {
     },
     assignment: {
       create: vi.fn(),
+      findFirst: vi.fn(), // Add this to match matching.js usage
+    },
+    volunteerHistory: {
+      findFirst: vi.fn(), // Add this to match matching.js usage
     },
     notice: {
       create: vi.fn(),
@@ -231,6 +235,10 @@ describe("POST /match/assign", () => {
       location: "Park",
       eventDate: "2025-06-01T00:00:00.000Z",
     });
+
+    // Mock the duplicate checks to return null (no existing assignment/registration)
+    prismaMock.assignment.findFirst.mockResolvedValueOnce(null);
+    prismaMock.volunteerHistory.findFirst.mockResolvedValueOnce(null);
 
     prismaMock.assignment.create.mockResolvedValueOnce({
       id: "a1",
