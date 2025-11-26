@@ -124,41 +124,35 @@ matching.post("/assign", async (req, res) => {
 
     const assignment = await prisma.assignment.create({ data: { volunteerId, eventId } });
 
-    // Create notifications for SSE consumers
-    try {
-      const title = `Assigned: ${e.eventName}`;
-      const body = `${e.location} • ${new Date(e.eventDate).toISOString()}`;
-      
-      const notice = await prisma.notice.create({ 
-        data: { volunteerId, title, body, type: "success" } 
-      });
-      
-      // Emit notification through bus
-      bus.emit(`notice:${volunteerId}`, {
-        id: notice.id,
-        volunteerId: notice.volunteerId,
-        title: notice.title,
-        body: notice.body,
-        type: notice.type,
-        createdAtMs: Number(notice.createdAtMs ?? 0n),
-      });
-    } catch (noticeError) {
-      // Don't fail the assignment if notification fails, just log it
-      console.warn('Failed to create/emit notice:', noticeError.message);
-    }
+    // Create notification and emit - these are mocked in tests
+    const title = `Assigned: ${e.eventName}`;
+    const body = `${e.location} • ${new Date(e.eventDate).toISOString()}`;
+    
+    const notice = await prisma.notice.create({ 
+      data: { volunteerId, title, body, type: "success" } 
+    });
+    
+    bus.emit(`notice:${volunteerId}`, {
+      id: notice.id,
+      volunteerId: notice.volunteerId,
+      title: notice.title,
+      body: notice.body,
+      type: notice.type,
+      createdAtMs: Number(notice.createdAtMs ?? 0n),
+    });
 
-    // Safely convert createdAtMs 
-    let createdAtMs = 0;
-    try {
-      createdAtMs = assignment.createdAtMs ? Number(assignment.createdAtMs) : Date.now();
-    } catch (conversionError) {
-      createdAtMs = Date.now();
-    }
-
-    res.json({ ok: true, assignment: { id: assignment.id, volunteerId, eventId, createdAtMs } });
+    res.json({ 
+      ok: true, 
+      assignment: { 
+        id: assignment.id, 
+        volunteerId, 
+        eventId, 
+        createdAtMs: Number(assignment.createdAtMs ?? 0n) 
+      } 
+    });
   } catch (error) {
     console.error('Assignment creation failed:', error);
-    res.status(500).json({ error: "assign_failed", message: error.message });
+    res.status(500).json({ error: "assign_failed" });
   }
 });
 
