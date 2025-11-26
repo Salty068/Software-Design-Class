@@ -10,7 +10,7 @@ vi.mock("jsonwebtoken", () => ({
   },
 }));
 
-import { authenticate, requireRole, auth as basicAuth } from "../authenticate.js";
+import { authenticate, requireRole, auth as basicAuth } from "../auth.js";
 
 function createRes() {
   return {
