@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext.simple.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

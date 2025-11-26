@@ -13,6 +13,17 @@ type EventItem = {
   urgency: EventUrgency;
   eventDate: string;
 };
+
+type VolunteerAssignment = {
+  id: string;
+  volunteerId: string;
+  volunteerName: string;
+  volunteerEmail: string;
+  assignmentType: 'admin_assigned' | 'self_registered';
+  assignmentDate: string;
+  status: 'active' | 'completed' | 'cancelled';
+};
+
 type Form = Omit<EventItem, "id">;
 
 type ApiSuccess<T> = { data: T };
@@ -65,6 +76,23 @@ async function deleteEvent(id: string): Promise<void> {
   }
 }
 
+async function fetchEventAssignments(eventId: string): Promise<VolunteerAssignment[]> {
+  const token = localStorage.getItem('authToken');
+  
+  const res = await fetch(`/api/events/${eventId}/assignments`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  
+  if (!res.ok) {
+    throw new Error('Failed to fetch event assignments');
+  }
+  
+  const data = await res.json();
+  return data.data || data || [];
+}
+
 const ALL_SKILLS = [
   "Teamwork",
   "Lifting",
@@ -87,6 +115,8 @@ const INPUT_CLASS =
 export default function EventManage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<VolunteerAssignment[]>([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
   const todayISO = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   const emptyForm: Form = {
@@ -120,6 +150,7 @@ export default function EventManage() {
     setSelectedId(null);
     setMode("create");
     setError(null);
+    setAssignments([]);
   };
 
   const hydrateFormForEdit = (e: EventItem) => {
@@ -129,9 +160,23 @@ export default function EventManage() {
     setSelectedId(id);
   };
 
-  const handleSelectEvent = (id: string) => {
+  const handleSelectEvent = async (id: string) => {
     const e = events.find((x) => x.id === id);
-    if (e) hydrateFormForEdit(e);
+    if (e) {
+      hydrateFormForEdit(e);
+      
+      // Fetch assignments for this event
+      setLoadingAssignments(true);
+      try {
+        const eventAssignments = await fetchEventAssignments(id);
+        setAssignments(eventAssignments);
+      } catch (error) {
+        console.error('Failed to fetch event assignments:', error);
+        setAssignments([]);
+      } finally {
+        setLoadingAssignments(false);
+      }
+    }
   };
 
   const toggleSkill = (s: string) =>
@@ -273,100 +318,166 @@ export default function EventManage() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto rounded-xl border border-amber-200 bg-amber-50 p-6">
+          <div className="flex-1 overflow-y-auto">
             <div className="grid gap-6 lg:grid-cols-2">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-stone-700">
-                  Event Name<span className="ml-1 text-rose-500">*</span>
-                </span>
-                <input
-                  type="text"
-                  maxLength={EVENT_TITLE_MAX_LENGTH}
-                  placeholder={`Up to ${EVENT_TITLE_MAX_LENGTH} characters`}
-                  value={form.name}
-                  onChange={(e) => set("name", e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </label>
+              {/* Event Form Section */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+                <h3 className="text-lg font-semibold text-stone-900 mb-4">Event Details</h3>
+                <div className="grid gap-6">
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-stone-700">
+                      Event Name<span className="ml-1 text-rose-500">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      maxLength={EVENT_TITLE_MAX_LENGTH}
+                      placeholder={`Up to ${EVENT_TITLE_MAX_LENGTH} characters`}
+                      value={form.name}
+                      onChange={(e) => set("name", e.target.value)}
+                      className={INPUT_CLASS}
+                    />
+                  </label>
 
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-stone-700">
-                  Event Date<span className="ml-1 text-rose-500">*</span>
-                </span>
-                <input
-                  type="date"
-                  min={todayISO}
-                  value={form.eventDate}
-                  onChange={(e) => set("eventDate", e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </label>
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-stone-700">
+                      Event Date<span className="ml-1 text-rose-500">*</span>
+                    </span>
+                    <input
+                      type="date"
+                      min={todayISO}
+                      value={form.eventDate}
+                      onChange={(e) => set("eventDate", e.target.value)}
+                      className={INPUT_CLASS}
+                    />
+                  </label>
 
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-stone-700">
-                  Urgency<span className="ml-1 text-rose-500">*</span>
-                </span>
-                <select
-                  value={form.urgency}
-                  onChange={(e) => set("urgency", e.target.value as EventUrgency)}
-                  className={`${INPUT_CLASS} appearance-none pr-10`}
-                >
-                  {URGENCY_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </label>
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-stone-700">
+                      Urgency<span className="ml-1 text-rose-500">*</span>
+                    </span>
+                    <select
+                      value={form.urgency}
+                      onChange={(e) => set("urgency", e.target.value as EventUrgency)}
+                      className={`${INPUT_CLASS} appearance-none pr-10`}
+                    >
+                      {URGENCY_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="flex flex-col gap-2 lg:col-span-2">
-                <span className="text-sm font-semibold text-stone-700">
-                  Location<span className="ml-1 text-rose-500">*</span>
-                </span>
-                <textarea
-                  rows={2}
-                  placeholder="Address, instructions, etc."
-                  value={form.location}
-                  onChange={(e) => set("location", e.target.value)}
-                  className={`${INPUT_CLASS} min-h-[96px] resize-y`}
-                />
-              </label>
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-stone-700">
+                      Location<span className="ml-1 text-rose-500">*</span>
+                    </span>
+                    <textarea
+                      rows={2}
+                      placeholder="Address, instructions, etc."
+                      value={form.location}
+                      onChange={(e) => set("location", e.target.value)}
+                      className={`${INPUT_CLASS} min-h-[96px] resize-y`}
+                    />
+                  </label>
 
-              <label className="flex flex-col gap-2 lg:col-span-2">
-                <span className="text-sm font-semibold text-stone-700">
-                  Event Description<span className="ml-1 text-rose-500">*</span>
-                </span>
-                <textarea
-                  rows={5}
-                  placeholder="Describe the event goals, tasks, and details…"
-                  value={form.description}
-                  onChange={(e) => set("description", e.target.value)}
-                  className={`${INPUT_CLASS} min-h-[160px] resize-y`}
-                />
-              </label>
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-stone-700">
+                      Event Description<span className="ml-1 text-rose-500">*</span>
+                    </span>
+                    <textarea
+                      rows={5}
+                      placeholder="Describe the event goals, tasks, and details…"
+                      value={form.description}
+                      onChange={(e) => set("description", e.target.value)}
+                      className={`${INPUT_CLASS} min-h-[160px] resize-y`}
+                    />
+                  </label>
 
-              <div className="flex flex-col gap-2 lg:col-span-2">
-                <span className="text-sm font-semibold text-stone-700">
-                  Required Skills<span className="ml-1 text-rose-500">*</span>
-                </span>
-                <div className="flex flex-wrap gap-3">
-                  {ALL_SKILLS.map((s) => {
-                    const on = form.requiredSkills.includes(s);
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => toggleSkill(s)}
-                        className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                          on
-                            ? "border-amber-500 bg-amber-500 text-white"
-                            : "border-amber-200 bg-white text-stone-600 hover:bg-amber-50"
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    );
-                  })}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-semibold text-stone-700">
+                      Required Skills<span className="ml-1 text-rose-500">*</span>
+                    </span>
+                    <div className="flex flex-wrap gap-3">
+                      {ALL_SKILLS.map((s) => {
+                        const on = form.requiredSkills.includes(s);
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => toggleSkill(s)}
+                            className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                              on
+                                ? "border-amber-500 bg-amber-500 text-white"
+                                : "border-amber-200 bg-white text-stone-600 hover:bg-amber-50"
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {/* Volunteer Assignments Section */}
+              {selectedId && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+                  <h3 className="text-lg font-semibold text-stone-900 mb-4">Assigned Volunteers</h3>
+                  
+                  {loadingAssignments ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-stone-500">Loading assignments...</div>
+                    </div>
+                  ) : assignments.length === 0 ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-center">
+                        <div className="text-4xl mb-2">👥</div>
+                        <div className="text-stone-600">No volunteers assigned yet</div>
+                        <div className="text-sm text-stone-500 mt-1">
+                          Volunteers can sign up or be assigned by admins
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {assignments.map((assignment) => (
+                        <div
+                          key={assignment.id}
+                          className="bg-white rounded-lg border border-amber-200 p-4"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-semibold text-stone-900">
+                                {assignment.volunteerName}
+                              </div>
+                              <div className="text-sm text-stone-600">
+                                {assignment.volunteerEmail}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                assignment.status === 'active' 
+                                  ? 'bg-green-100 text-green-800'
+                                  : assignment.status === 'completed'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {assignment.status}
+                              </div>
+                              <div className="text-xs text-stone-500 mt-1">
+                                {assignment.assignmentType === 'admin_assigned' ? '👨‍💼 Admin assigned' : '🙋‍♀️ Self registered'}
+                              </div>
+                              <div className="text-xs text-stone-500">
+                                {new Date(assignment.assignmentDate).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

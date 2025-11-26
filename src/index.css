@@ -24,6 +24,52 @@
   overflow: hidden;
 }
 
+/* Custom Select Dropdown Styling */
+.custom-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23ea580c'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+  padding-right: 40px;
+}
+
+.custom-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
+}
+
+/* Enhanced dropdown for supported browsers */
+.custom-select option {
+  background-color: #fef7f0;
+  color: #1f2937;
+  padding: 12px 16px;
+  font-weight: 500;
+  border-bottom: 1px solid #fed7aa;
+}
+
+.custom-select option:hover {
+  background-color: #fed7aa;
+  color: #ea580c;
+}
+
+.custom-select option:checked {
+  background-color: #ea580c;
+  color: white;
+  font-weight: 600;
+}
+
+/* Additional orange shades for custom dropdown */
+.hover\:from-orange-25:hover {
+  --tw-gradient-from: #fffbf5 var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(255 251 245 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.hover\:to-orange-50:hover {
+  --tw-gradient-to: #fff7ed var(--tw-gradient-to-position);
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

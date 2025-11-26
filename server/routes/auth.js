@@ -8,7 +8,7 @@ import { authenticate } from "./middleware/auth.js";
 const router = Router();
 
 const SALT_ROUNDS = 10;
-const JWT_SECRET = process.env.JWT_SECRET || "change-this";
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
 const JWT_EXPIRES_IN = "7d";
 
 const emailSchema = z.email()
@@ -50,7 +50,7 @@ function computeProfileComplete(profile) {
 
 function buildUserResponse(credentials, profile, lastLoginIso) {
   return {
-    id: profile.id,
+    id: credentials.userId, // Use email as the ID since it's the userId in the database
     email: credentials.userId,
     name: profile.fullName,
     role: profile.role,
@@ -65,7 +65,7 @@ function signToken(user) {
 }
 
 function formatZodErrors(error) {
-  return error.errors.map((e) => e.message);
+  return error?.errors?.map((e) => e.message) || ['Validation error'];
 }
 
 router.post("/register", async (req, res) => {

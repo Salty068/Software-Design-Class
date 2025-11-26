@@ -3,6 +3,7 @@ import { Router } from "express";
 import { toUniqueSkills } from "../shared.js";
 import { store } from "../store.memory.DEAD.js";
 import prisma from "../db.js";
+import { authenticate } from "./middleware/auth.js";
 
 export const profiles = new Map();
 
@@ -298,7 +299,7 @@ function ensureUserId(res, userId) {
 
 export const profile = Router();
 
-profile.get("/", async (_req, res) => {
+profile.get("/", authenticate, async (_req, res) => {
   try {
     const allProfiles = await prisma.userProfile.findMany({
       orderBy: { createdAt: 'desc' }
@@ -307,6 +308,7 @@ profile.get("/", async (_req, res) => {
     const formattedProfiles = allProfiles.map(profile => ({
       userId: profile.userId,
       fullName: profile.fullName,
+      role: profile.role, // Include role for admin management
       location: {
         address1: profile.address1,
         address2: profile.address2,
@@ -326,7 +328,7 @@ profile.get("/", async (_req, res) => {
   }
 });
 
-profile.get("/:userId", async (req, res) => {
+profile.get("/:userId", authenticate, async (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
@@ -362,7 +364,7 @@ profile.get("/:userId", async (req, res) => {
   }
 });
 
-profile.post("/:userId", async (req, res) => {
+profile.post("/:userId", authenticate, async (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
@@ -399,7 +401,12 @@ profile.post("/:userId", async (req, res) => {
       }
     });
 
-    syncVolunteerFromProfile(normalized);
+    // Note: Volunteer sync disabled as it uses deprecated store system
+    // try {
+    //   syncVolunteerFromProfile(normalized);
+    // } catch (syncError) {
+    //   console.warn('Warning: Failed to sync volunteer data, but profile was created successfully:', syncError);
+    // }
 
     const formattedProfile = {
       userId: newProfile.userId,
@@ -423,7 +430,7 @@ profile.post("/:userId", async (req, res) => {
   }
 });
 
-profile.put("/:userId", async (req, res) => {
+profile.put("/:userId", authenticate, async (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 
@@ -596,7 +603,12 @@ profile.put("/:userId", async (req, res) => {
       availability: updatedProfile.availability,
     };
 
-    syncVolunteerFromProfile(normalized);
+    // Note: Volunteer sync disabled as it uses deprecated store system
+    // try {
+    //   syncVolunteerFromProfile(normalized);
+    // } catch (syncError) {
+    //   console.warn('Warning: Failed to sync volunteer data, but profile was updated successfully:', syncError);
+    // }
 
     res.status(200).json({ success: true, message: "Profile updated successfully", data: normalized });
   } catch (error) {
@@ -605,7 +617,7 @@ profile.put("/:userId", async (req, res) => {
   }
 });
 
-profile.delete("/:userId", async (req, res) => {
+profile.delete("/:userId", authenticate, async (req, res) => {
   const { userId } = req.params;
   if (!ensureUserId(res, userId)) return;
 

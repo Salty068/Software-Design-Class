@@ -1,11 +1,11 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext.simple.tsx";
+import { useAuth } from "../contexts/AuthContext.tsx";
 import { useNotify, useNotificationCenter } from "./NotificationProvider";
 import { useState, useMemo } from "react";
 import NotificationPanel from "./NotificationPanel";
 
 export default function RoleBasedHeader() {
-  const { user, isAuthenticated, isAdmin, isVolunteer, logout } = useAuth();
+  const { user, isAuthenticated, isAdmin, isVolunteer, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const notify = useNotify();
   const { notices } = useNotificationCenter();
@@ -24,6 +24,12 @@ export default function RoleBasedHeader() {
   };
 
   const getNavigationItems = () => {
+    if (isLoading) {
+      return [
+        { to: "/", label: "Home" }
+      ];
+    }
+    
     if (!isAuthenticated) {
       return [
         { to: "/", label: "Home" },
@@ -38,7 +44,8 @@ export default function RoleBasedHeader() {
         { to: "/admin/dashboard", label: "Admin Dashboard" },
         { to: "/admin/users", label: "Manage Users" },
         { to: "/event-manage", label: "Event Management" },
-        { to: "/volunteer-matching", label: "Volunteer Matching" }
+        { to: "/volunteer-matching", label: "Volunteer Matching" },
+        { to: "/reports", label: "Reports" }
       ];
     }
 
@@ -61,23 +68,35 @@ export default function RoleBasedHeader() {
       <header className="w-full">
         <div className="flex items-center justify-between gap-6 py-4 px-6">
           <nav className="flex items-center gap-4 px-5 py-3 rounded-lg bg-gradient-to-r from-gray-50 via-white to-gray-50 shadow-sm">
-            {navigationItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  isActive
-                    ? "text-black font-medium px-3 py-2 rounded-md bg-gradient-to-r from-orange-100 to-orange-50"
-                    : "text-black opacity-70 hover:opacity-100 px-3 py-2 rounded-md hover:bg-gray-100 transition-all duration-200 whitespace-nowrap"
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {isLoading ? (
+              <span className="text-black opacity-70 px-3 py-2">
+                Volunteer Management System
+              </span>
+            ) : (
+              navigationItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    isActive
+                      ? "text-black font-medium px-3 py-2 rounded-md bg-gradient-to-r from-orange-100 to-orange-50"
+                      : "text-black opacity-70 hover:opacity-100 px-3 py-2 rounded-md hover:bg-gray-100 transition-all duration-200 whitespace-nowrap"
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))
+            )}
           </nav>
 
           <div className="flex items-center gap-4">
-            {isAuthenticated && (
+            {isLoading && (
+              <span className="text-sm text-gray-600 animate-pulse">
+                Verifying authentication...
+              </span>
+            )}
+            
+            {!isLoading && isAuthenticated && (
               <>
                 <span className="text-sm text-gray-600">
                   Welcome, {user?.name}
@@ -111,7 +130,7 @@ export default function RoleBasedHeader() {
               </>
             )}
 
-            {!isAuthenticated && (
+            {!isLoading && !isAuthenticated && (
               <button
                 className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors duration-200"
                 onClick={() =>

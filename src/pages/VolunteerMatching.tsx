@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNotify, useServerNotifications } from "../components/NotificationProvider.tsx";
+import { useNotify } from "../components/NotificationProvider.tsx";
+import { useAuth } from "../contexts/AuthContext.tsx";
+import CustomSelect from "../components/CustomSelect.tsx";
 
 type Volunteer = { id: string; name: string; location: string; skills: string[] };
 type EventItem = { id: string; name: string; location: string; requiredSkills: string[]; date: string; urgency: "Low"|"Medium"|"High" };
@@ -11,17 +13,29 @@ export default function VolunteerMatchingDemo() {
   const [volId, setVolId] = useState<string>("");
   const [ranked, setRanked] = useState<Ranked[]>([]);
   const [eventId, setEventId] = useState("");
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [lastAssignmentSuccess, setLastAssignmentSuccess] = useState<string | null>(null);
   const vol = useMemo(() => vols.find(v => v.id === volId), [volId, vols]);
   const notify = useNotify();
+  const { requireAdmin } = useAuth();
 
-  useServerNotifications(volId || undefined);
+  // Ensure only admins can access this page
+  useEffect(() => {
+    requireAdmin();
+  }, [requireAdmin]);
+
+  // Note: Removed automatic SSE subscription for selected volunteers
+  // Admins should only receive notifications for their own actions, not for every volunteer they select
 
   // load volunteers + events once
   useEffect(() => {
     (async () => {
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
       const [vRes, eRes] = await Promise.all([
-        fetch("/api/match/volunteers"),
-        fetch("/api/match/events"),
+        fetch("/api/match/volunteers", { headers }),
+        fetch("/api/match/events", { headers }),
       ]);
       const vData: Volunteer[] = vRes.ok ? await vRes.json() : [];
       const eData: EventItem[] = eRes.ok ? await eRes.json() : [];
@@ -35,7 +49,10 @@ export default function VolunteerMatchingDemo() {
   useEffect(() => {
     if (!volId) return;
     (async () => {
-      const res = await fetch(`/api/match/volunteer/${encodeURIComponent(volId)}?topN=9999`);
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      const res = await fetch(`/api/match/volunteer/${encodeURIComponent(volId)}?topN=9999`, { headers });
       const data: Ranked[] = res.ok ? await res.json() : [];
       setRanked(data);
       // default to top scored if exists, otherwise first event
@@ -57,13 +74,68 @@ export default function VolunteerMatchingDemo() {
 
   const onAssign = async () => {
     if (!eventId || !volId) return;
-    const res = await fetch("/api/match/assign", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ volunteerId: volId, eventId }),
-    });
-    if (!res.ok) { notify({ title: "Assignment failed", body: `HTTP ${res.status}`, type: "error" }); return; }
-   
+    
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      notify({ title: "Authentication required", body: "Please log in", type: "error" });
+      return;
+    }
+
+    setIsAssigning(true);
+    setLastAssignmentSuccess(null);
+
+    try {
+      const res = await fetch("/api/match/assign", {
+        method: "POST",
+        headers: { 
+          "content-type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ volunteerId: volId, eventId }),
+      });
+      
+      if (!res.ok) { 
+        if (res.status === 409) {
+          // Handle duplicate assignment
+          const errorData = await res.json();
+          notify({ 
+            title: "Already Assigned", 
+            body: errorData.message || "This volunteer is already assigned to this event", 
+            type: "warn" 
+          }); 
+        } else {
+          notify({ title: "Assignment failed", body: `HTTP ${res.status}`, type: "error" }); 
+        }
+        return; 
+      }
+      
+      // Success
+      const selectedVolunteer = vols.find(v => v.id === volId);
+      const selectedEvent = events.find(e => e.id === eventId);
+      
+      notify({ 
+        title: "✅ Assignment Successful!", 
+        body: `${selectedVolunteer?.name} assigned to "${selectedEvent?.name}"`, 
+        type: "success" 
+      });
+
+      // Set visual success indicator
+      setLastAssignmentSuccess(`${volId}-${eventId}`);
+      
+      // Clear success indicator after 3 seconds
+      setTimeout(() => {
+        setLastAssignmentSuccess(null);
+      }, 3000);
+
+    } catch (error) {
+      notify({ 
+        title: "Assignment Error", 
+        body: "Network error occurred. Please try again.", 
+        type: "error" 
+      });
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   const getUrgencyColor = (urgency: string) => {
@@ -111,7 +183,26 @@ export default function VolunteerMatchingDemo() {
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-orange-100">
+        {/* Success Banner */}
+        {lastAssignmentSuccess && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 mb-6 animate-pulse">
+            <div className="flex items-center justify-center gap-3">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-green-800 font-semibold">🎉 Assignment Completed Successfully!</p>
+                <p className="text-green-600 text-sm">
+                  {vols.find(v => v.id === volId)?.name} has been assigned to "{events.find(e => e.id === eventId)?.name}"
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-gradient-to-br from-white to-orange-50 rounded-xl shadow-lg p-8 mb-8 border border-orange-200">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -124,14 +215,17 @@ export default function VolunteerMatchingDemo() {
           <div className="grid md:grid-cols-2 gap-8">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Choose Volunteer Profile</label>
-              <select 
-                value={volId} 
-                onChange={e => setVolId(e.target.value)} 
+              <CustomSelect
+                options={vols.map(v => ({
+                  value: v.id,
+                  label: v.name,
+                  subtitle: `${v.location} • ${v.skills.join(', ')}`
+                }))}
+                value={volId}
+                onChange={setVolId}
+                placeholder="Select a volunteer..."
                 disabled={!vols.length}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900"
-              >
-                {vols.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
+              />
             </div>
             
             {vol && (
@@ -160,7 +254,7 @@ export default function VolunteerMatchingDemo() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-orange-100">
+        <div className="bg-gradient-to-br from-white to-orange-50 rounded-xl shadow-lg p-8 mb-8 border border-orange-200">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,38 +267,64 @@ export default function VolunteerMatchingDemo() {
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-3">Choose Event (Sorted by Best Match)</label>
-              <select 
-                value={eventId} 
-                onChange={e => setEventId(e.target.value)} 
-                disabled={!events.length}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-gray-900"
-              >
-                {rankedFirst.map(id => {
+              <CustomSelect
+                options={rankedFirst.map(id => {
                   const e = events.find(x => x.id === id)!;
                   const sc = scoreById.get(id);
-                  return (
-                    <option key={id} value={id}>
-                      {e.name} • {e.location} • {e.urgency} Priority • {formatDate(e.date)}{typeof sc === "number" ? ` • Match: ${sc}%` : " • No Match Score"}
-                    </option>
-                  );
+                  return {
+                    value: id,
+                    label: e.name,
+                    subtitle: `${e.location} • ${e.urgency} Priority • ${formatDate(e.date)}${typeof sc === "number" ? ` • Match: ${sc}%` : " • No Match Score"}`
+                  };
                 })}
-              </select>
+                value={eventId}
+                onChange={setEventId}
+                placeholder="Select an event..."
+                disabled={!events.length}
+              />
             </div>
             
             <div className="flex flex-col gap-3">
               <button 
-                disabled={!eventId} 
+                disabled={!eventId || isAssigning} 
                 onClick={onAssign} 
-                className="flex-1 bg-orange-600 text-white hover:bg-orange-700 disabled:bg-gray-300 disabled:text-gray-500 px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center justify-center gap-2"
+                className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2 border ${
+                  lastAssignmentSuccess === `${volId}-${eventId}`
+                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 border-green-300 text-white' 
+                    : isAssigning
+                    ? 'bg-gradient-to-r from-orange-400 to-orange-500 border-orange-300 text-white cursor-not-allowed'
+                    : !eventId
+                    ? 'bg-gradient-to-r from-gray-300 to-gray-400 border-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 border-orange-300 text-white'
+                }`}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Assign Volunteer
+                {isAssigning ? (
+                  <>
+                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Assigning...
+                  </>
+                ) : lastAssignmentSuccess === `${volId}-${eventId}` ? (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Assigned Successfully!
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Assign Volunteer
+                  </>
+                )}
               </button>
               <button 
                 onClick={() => setEventId("")} 
-                className="px-6 py-3 border-2 border-orange-600 text-orange-600 hover:bg-orange-50 rounded-lg font-semibold transition-colors duration-200"
+                className="px-6 py-3 border border-orange-200 bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 text-orange-800 hover:text-orange-900 rounded-lg font-semibold transition-all duration-200"
               >
                 Clear Selection
               </button>
@@ -212,7 +332,7 @@ export default function VolunteerMatchingDemo() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-8 border border-orange-100">
+        <div className="bg-gradient-to-br from-white to-orange-50 rounded-xl shadow-lg p-8 border border-orange-200">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,7 +340,7 @@ export default function VolunteerMatchingDemo() {
               </svg>
             </div>
             <h2 className="text-2xl font-semibold text-gray-900">Available Events</h2>
-            <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{events.length} events</span>
+            <span className="text-sm text-gray-500 bg-orange-100 px-3 py-1 rounded-full">{events.length} events</span>
           </div>
           
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -229,7 +349,7 @@ export default function VolunteerMatchingDemo() {
               const missing = vol ? e.requiredSkills.filter(s => !vol.skills.includes(s)) : [];
               const ok = vol ? missing.length === 0 && e.location === vol.location : false;
               return (
-                <div key={e.id} className={`border-2 rounded-xl p-6 transition-all duration-200 hover:shadow-lg ${ok ? "border-green-300 bg-green-50" : "border-gray-200 hover:border-orange-300"}`}>
+                <div key={e.id} className={`border-2 rounded-xl p-6 transition-all duration-200 hover:shadow-lg ${ok ? "border-green-300 bg-gradient-to-br from-green-50 to-green-100" : "border-orange-200 bg-gradient-to-br from-white to-orange-50 hover:border-orange-300 hover:to-orange-100"}`}>
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{e.name}</h3>
                     <div className="flex gap-2">

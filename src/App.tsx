@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { getHomeStats, getFeaturedEvents } from './services/home.api';
 import type { HomeStats, FeaturedEvent } from './services/home.api';
 import { useToast } from './components/ToastProvider';
-import { useAuth } from './contexts/AuthContext.simple.tsx';
+import { useAuth } from './contexts/AuthContext.tsx';
 
 function App() {
   const [stats, setStats] = useState<HomeStats | null>(null);

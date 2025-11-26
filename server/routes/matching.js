@@ -26,6 +26,9 @@ const toEventDTO = (e) => ({
 matching.get("/volunteers", async (_req, res) => {
   try {
     const rows = await prisma.userProfile.findMany({
+      where: {
+        role: "Volunteer"  // Only fetch users with Volunteer role
+      },
       orderBy: { createdAt: "desc" },
       select: { userId: true, fullName: true, city: true, skills: true },
     });
@@ -86,6 +89,37 @@ matching.post("/assign", async (req, res) => {
       prisma.eventDetails.findUnique({ where: { id: eventId } }),
     ]);
     if (!v || !e) return res.status(404).json({ error: "not found" });
+
+    // Check for existing assignment to prevent duplicates
+    const [existingAssignment, existingHistory] = await Promise.all([
+      prisma.assignment.findFirst({
+        where: {
+          volunteerId: volunteerId,
+          eventId: eventId
+        }
+      }),
+      prisma.volunteerHistory.findFirst({
+        where: {
+          userId: volunteerId,
+          eventId: eventId,
+          participationStatus: { in: ['registered', 'completed'] }
+        }
+      })
+    ]);
+
+    if (existingAssignment) {
+      return res.status(409).json({ 
+        error: "duplicate_assignment", 
+        message: "Volunteer is already assigned to this event by admin" 
+      });
+    }
+
+    if (existingHistory) {
+      return res.status(409).json({ 
+        error: "duplicate_registration", 
+        message: "Volunteer has already registered for this event" 
+      });
+    }
 
     const assignment = await prisma.assignment.create({ data: { volunteerId, eventId } });
 

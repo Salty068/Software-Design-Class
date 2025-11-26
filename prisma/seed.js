@@ -146,7 +146,7 @@ async function seedDemo() {
       data: {
         volunteerId: demoVols[0].id,
         eventId: e.id,
-        createdAtMs: Date.now(),
+        createdAtMs: Math.floor(Date.now() / 1000),
       },
     });
 
@@ -166,7 +166,7 @@ async function seedDemo() {
         title: "Event Assigned",
         body: `You have been assigned to ${e.name}.`,
         type: "info",
-        createdAtMs: Date.now(),
+        createdAtMs: Math.floor(Date.now() / 1000),
       },
     });
   }

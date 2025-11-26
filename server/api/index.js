@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PrismaClient } from '@prisma/client';
+import { authenticate } from "../routes/middleware/auth.js";
 import {
   createEvent,
   deleteEvent,
@@ -117,6 +118,118 @@ router.get("/assignments", async (req, res) => {
   }
 });
 
+// Get assignments for a specific event
+router.get("/events/:eventId/assignments", async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    if (!eventId) {
+      return res.status(400).json({ error: "eventId is required" });
+    }
+
+    // Fetch assignments for this event with volunteer details
+    const assignments = await prisma.assignment.findMany({
+      where: { eventId: eventId },
+      include: {
+        volunteer: true
+      },
+      orderBy: { createdAtMs: "desc" }
+    });
+
+    // Also fetch volunteer history for this event (self-registered volunteers)
+    const volunteerHistory = await prisma.volunteerHistory.findMany({
+      where: { 
+        eventId: eventId,
+        participationStatus: { in: ['registered', 'completed'] }
+      },
+      include: {
+        profile: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Combine assignments and volunteer history
+    const allVolunteers = [];
+
+    // Add admin-assigned volunteers
+    assignments.forEach(assignment => {
+      allVolunteers.push({
+        id: `assignment-${assignment.id}`,
+        volunteerId: assignment.volunteerId,
+        volunteerName: assignment.volunteer?.fullName || 'Unknown Volunteer',
+        volunteerEmail: assignment.volunteer?.userId || 'No email',
+        assignmentType: 'admin_assigned',
+        assignmentDate: new Date(Number(assignment.createdAtMs)).toISOString(),
+        status: 'active'
+      });
+    });
+
+    // Add self-registered volunteers (avoid duplicates)
+    volunteerHistory.forEach(history => {
+      // Only add if not already in assignments
+      const alreadyAssigned = assignments.some(a => a.volunteerId === history.userId);
+      if (!alreadyAssigned) {
+        allVolunteers.push({
+          id: `history-${history.id}`,
+          volunteerId: history.userId,
+          volunteerName: history.profile?.fullName || 'Unknown Volunteer',
+          volunteerEmail: history.profile?.userId || 'No email',
+          assignmentType: 'self_registered',
+          assignmentDate: history.createdAt.toISOString(),
+          status: history.participationStatus === 'completed' ? 'completed' : 'active'
+        });
+      }
+    });
+
+    // Remove any remaining duplicates based on volunteerId (extra safety)
+    const uniqueVolunteers = [];
+    const seenVolunteerIds = new Set();
+    
+    allVolunteers.forEach(volunteer => {
+      if (!seenVolunteerIds.has(volunteer.volunteerId)) {
+        seenVolunteerIds.add(volunteer.volunteerId);
+        uniqueVolunteers.push(volunteer);
+      }
+    });
+
+    const finalVolunteers = uniqueVolunteers;
+
+    res.json({ 
+      success: true, 
+      data: finalVolunteers,
+      count: finalVolunteers.length 
+    });
+  } catch (error) {
+    console.error('Error fetching event assignments:', error);
+    res.status(500).json({ error: "Failed to fetch event assignments" });
+  }
+});
+
+// Debug endpoint to check what data exists
+router.get("/debug/assignments", async (req, res) => {
+  try {
+    const assignments = await prisma.assignment.findMany({
+      include: { volunteer: true, event: true }
+    });
+    const volunteerHistory = await prisma.volunteerHistory.findMany({
+      include: { profile: true, event: true }
+    });
+    const events = await prisma.eventDetails.findMany();
+    
+    res.json({
+      assignments: assignments,
+      volunteerHistory: volunteerHistory,
+      events: events,
+      assignmentCount: assignments.length,
+      historyCount: volunteerHistory.length,
+      eventCount: events.length
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get("/volunteer-history", async (req, res) => {
   try {
     const {
@@ -204,6 +317,102 @@ router.post("/volunteer-history/reset", async (req, res) => {
     await resetVolunteerHistory(seed);
     res.status(204).end();
   } catch (error) {
+    handleError(res, error);
+  }
+});
+
+// Check-in endpoint
+router.post("/volunteer-history/checkin", authenticate, async (req, res) => {
+  try {
+    const { userId, eventId } = req.body;
+
+    if (!userId || !eventId) {
+      return res.status(400).json({ error: "userId and eventId are required" });
+    }
+
+    // Find the volunteer history record
+    const existingHistory = await prisma.volunteerHistory.findFirst({
+      where: {
+        userId: userId,
+        eventId: eventId
+      }
+    });
+
+    if (!existingHistory) {
+      return res.status(404).json({ error: "Volunteer assignment not found" });
+    }
+
+    if (existingHistory.participationStatus === 'CheckedIn') {
+      return res.status(400).json({ error: "Already checked in to this event" });
+    }
+
+    // Update the status to CheckedIn
+    const updatedHistory = await prisma.volunteerHistory.update({
+      where: { id: existingHistory.id },
+      data: { 
+        participationStatus: 'CheckedIn',
+        updatedAt: new Date()
+      }
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Successfully checked in",
+      data: updatedHistory 
+    });
+
+  } catch (error) {
+    console.error('Check-in error:', error);
+    handleError(res, error);
+  }
+});
+
+// Cancel assignment endpoint
+router.post("/volunteer-history/cancel", authenticate, async (req, res) => {
+  try {
+    const { userId, eventId } = req.body;
+
+    if (!userId || !eventId) {
+      return res.status(400).json({ error: "userId and eventId are required" });
+    }
+
+    // Find the volunteer history record
+    const existingHistory = await prisma.volunteerHistory.findFirst({
+      where: {
+        userId: userId,
+        eventId: eventId
+      }
+    });
+
+    if (!existingHistory) {
+      return res.status(404).json({ error: "Volunteer assignment not found" });
+    }
+
+    if (existingHistory.participationStatus === 'Cancelled') {
+      return res.status(400).json({ error: "Assignment already cancelled" });
+    }
+
+    if (existingHistory.participationStatus === 'Completed') {
+      return res.status(400).json({ error: "Cannot cancel a completed event" });
+    }
+
+    // Update the status to Cancelled
+    const updatedHistory = await prisma.volunteerHistory.update({
+      where: { id: existingHistory.id },
+      data: { 
+        participationStatus: 'Cancelled',
+        updatedAt: new Date()
+      }
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Assignment cancelled successfully",
+      data: updatedHistory 
+    });
+
+  } catch (error) {
+    console.error('Cancel assignment error:', error);
     handleError(res, error);
   }
 });

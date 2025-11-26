@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext.simple.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
+import { useNotify } from '../components/NotificationProvider.tsx';
 
 interface Event {
   id: string;
@@ -10,11 +11,12 @@ interface Event {
   requiredSkills: string[];
   urgency: string;
   isMatched?: boolean;
-  status?: 'available' | 'registered' | 'completed' | 'cancelled' | 'assigned';
+  status?: 'available' | 'registered' | 'completed' | 'cancelled' | 'assigned' | 'CheckedIn';
 }
 
 export default function FindEvents() {
   const { user, requireAuth } = useAuth();
+  const notify = useNotify();
   const [events, setEvents] = useState<Event[]>([]);
   const [myEvents, setMyEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,9 @@ export default function FindEvents() {
   const [activeTab, setActiveTab] = useState<'available' | 'my-events'>('available');
   const [searchTerm, setSearchTerm] = useState('');
   const [signingUp, setSigningUp] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState<{ type: 'checkin' | 'cancel', eventId: string, eventName: string } | null>(null);
+  const [showCancelledEvents, setShowCancelledEvents] = useState(false);
 
   useEffect(() => {
     requireAuth();
@@ -65,12 +70,15 @@ export default function FindEvents() {
 
   const fetchMyEvents = async () => {
     try {
-      if (!user?.id) return;
+      if (!user?.email) return;
 
       // Fetch both volunteer history and admin assignments
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
       const [historyResponse, assignmentsResponse] = await Promise.all([
-        fetch(`/api/volunteer-history?userId=${user.id}`),
-        fetch(`/api/assignments?userId=${user.id}`)
+        fetch(`/api/volunteer-history?userId=${user.email}`, { headers }),
+        fetch(`/api/assignments?userId=${user.email}`, { headers })
       ]);
       
       let myEventsData: Event[] = [];
@@ -78,7 +86,10 @@ export default function FindEvents() {
       // Process volunteer history (self sign-ups)
       if (historyResponse.ok) {
         const historyData = await historyResponse.json();
-        const historyEvents = historyData.data?.map((history: any) => ({
+        // Handle different data structures
+        const historyArray = historyData.data || historyData || [];
+        
+        const historyEvents = Array.isArray(historyArray) ? historyArray.map((history: any) => ({
           id: history.eventId || history.id,
           name: history.eventName || 'Event',
           description: history.eventDescription || '',
@@ -86,16 +97,22 @@ export default function FindEvents() {
           eventDate: history.eventDate,
           requiredSkills: history.requiredSkills || [],
           urgency: history.urgency || 'Medium',
-          status: history.participationStatus || 'registered',
+          status: (history.participationStatus === 'Completed' ? 'completed' : 
+                    history.participationStatus === 'Cancelled' ? 'cancelled' : 
+                    history.participationStatus === 'CheckedIn' ? 'CheckedIn' :
+                    'registered') as 'registered' | 'completed' | 'cancelled' | 'CheckedIn',
           isMatched: true
-        })) || [];
+        })) : [];
         myEventsData = [...myEventsData, ...historyEvents];
       }
 
       // Process admin assignments
       if (assignmentsResponse.ok) {
         const assignmentsData = await assignmentsResponse.json();
-        const assignmentEvents = assignmentsData.data?.map((assignment: any) => ({
+        // Handle different data structures  
+        const assignmentsArray = assignmentsData.data || assignmentsData || [];
+        
+        const assignmentEvents = Array.isArray(assignmentsArray) ? assignmentsArray.map((assignment: any) => ({
           id: assignment.eventId,
           name: assignment.eventName || 'Event',
           description: assignment.eventDescription || '',
@@ -103,9 +120,9 @@ export default function FindEvents() {
           eventDate: assignment.eventDate,
           requiredSkills: assignment.requiredSkills || [],
           urgency: assignment.urgency || 'Medium',
-          status: 'assigned',
+          status: 'assigned' as 'assigned',
           isMatched: true
-        })) || [];
+        })) : [];
         myEventsData = [...myEventsData, ...assignmentEvents];
       }
 
@@ -165,6 +182,98 @@ export default function FindEvents() {
     }
   };
 
+  const handleCheckIn = async (eventId: string) => {
+    if (!user?.id) return;
+
+    try {
+      setActionLoading(eventId);
+      
+      const response = await fetch(`/api/volunteer-history/checkin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          eventId: eventId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to check in');
+      }
+
+      notify({ 
+        title: "✓ Checked In Successfully!", 
+        body: "You have been checked in to the event.", 
+        type: "success" 
+      });
+      await fetchMyEvents(); // Refresh my events
+
+    } catch (error) {
+      console.error('Error checking in:', error);
+      notify({ 
+        title: "Check-in Failed", 
+        body: error instanceof Error ? error.message : 'Failed to check in. Please try again.', 
+        type: "error" 
+      });
+    } finally {
+      setActionLoading(null);
+      setShowConfirmModal(null);
+    }
+  };
+
+  const handleCancelAssignment = async (eventId: string) => {
+    if (!user?.id) return;
+
+    try {
+      setActionLoading(eventId);
+      
+      const response = await fetch(`/api/volunteer-history/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          eventId: eventId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Cancel assignment failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(errorData.message || errorData.error || `HTTP ${response.status}: Failed to cancel assignment`);
+      }
+
+      notify({ 
+        title: "✗ Assignment Cancelled", 
+        body: "Your assignment has been cancelled successfully.", 
+        type: "success" 
+      });
+      
+      await fetchMyEvents(); // Refresh my events
+
+    } catch (error) {
+      console.error('Error cancelling assignment:', error);
+      notify({ 
+        title: "Cancellation Failed", 
+        body: error instanceof Error ? error.message : 'Failed to cancel assignment. Please try again.', 
+        type: "error" 
+      });
+    } finally {
+      setActionLoading(null);
+      setShowConfirmModal(null);
+    }
+  };
+
   const filteredEvents = events.filter(event => {
     // First filter out events the user is already registered for
     const isAlreadyRegistered = myEvents.some(myEvent => myEvent.id === event.id);
@@ -176,11 +285,15 @@ export default function FindEvents() {
            event.requiredSkills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()));
   });
 
-  const filteredMyEvents = myEvents.filter(event =>
-    event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.requiredSkills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredMyEvents = myEvents.filter(event => {
+    // First, exclude cancelled events from the list unless user wants to see them
+    if (event.status === 'cancelled' && !showCancelledEvents) return false;
+    
+    // Then apply search filter
+    return event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           event.requiredSkills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()));
+  });
 
   const getUrgencyColor = (urgency: string) => {
     switch (urgency.toLowerCase()) {
@@ -195,10 +308,30 @@ export default function FindEvents() {
     }
   };
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'CheckedIn':
+        return 'Checked In';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'registered':
+        return 'Registered';
+      case 'assigned':
+        return 'Assigned';
+      case 'available':
+      default:
+        return 'Available';
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
         return 'bg-green-100 text-green-800';
+      case 'CheckedIn':
+        return 'bg-emerald-100 text-emerald-800';
       case 'cancelled':
         return 'bg-red-100 text-red-800';
       case 'registered':
@@ -238,7 +371,59 @@ export default function FindEvents() {
     );
   }
 
+  // Confirmation Modal Component
+  const ConfirmationModal = () => {
+    if (!showConfirmModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <h3 className="text-lg font-semibold mb-4">
+            {showConfirmModal.type === 'checkin' ? 'Check In to Event' : 'Cancel Assignment'}
+          </h3>
+          <p className="text-gray-600 mb-6">
+            {showConfirmModal.type === 'checkin' 
+              ? `Are you ready to check in to "${showConfirmModal.eventName}"?`
+              : `Are you sure you want to cancel your assignment to "${showConfirmModal.eventName}"?`}
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowConfirmModal(null)}
+              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={actionLoading === showConfirmModal.eventId}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (showConfirmModal.type === 'checkin') {
+                  handleCheckIn(showConfirmModal.eventId);
+                } else {
+                  handleCancelAssignment(showConfirmModal.eventId);
+                }
+              }}
+              className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                showConfirmModal.type === 'checkin'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
+              disabled={actionLoading === showConfirmModal.eventId}
+            >
+              {actionLoading === showConfirmModal.eventId 
+                ? 'Processing...' 
+                : showConfirmModal.type === 'checkin' 
+                  ? 'Check In' 
+                  : 'Cancel Assignment'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
+    <>
+      <ConfirmationModal />
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
       <div className="max-w-7xl mx-auto p-6">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -407,7 +592,19 @@ export default function FindEvents() {
             {activeTab === 'my-events' && (
               <div>
                 <div className="mb-6">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-2">My Matched Events</h2>
+                  <div className="flex justify-between items-start mb-2">
+                    <h2 className="text-xl font-semibold text-gray-900">My Matched Events</h2>
+                    <button
+                      onClick={() => setShowCancelledEvents(!showCancelledEvents)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                        showCancelledEvents
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {showCancelledEvents ? 'Hide' : 'Show'} Cancelled Events
+                    </button>
+                  </div>
                   <p className="text-gray-600">Events you've signed up for or been assigned to by administrators</p>
                 </div>
 
@@ -443,7 +640,7 @@ export default function FindEvents() {
                                 event.status || 'registered'
                               )}`}
                             >
-                              {event.status || 'Registered'}
+                              {getStatusText(event.status || 'registered')}
                             </span>
                             <span
                               className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getUrgencyColor(
@@ -500,12 +697,46 @@ export default function FindEvents() {
                             <span className="text-green-600 text-sm font-medium">✓ Completed</span>
                           ) : event.status === 'cancelled' ? (
                             <span className="text-red-600 text-sm font-medium">✗ Cancelled</span>
-                          ) : event.status === 'assigned' ? (
-                            <span className="text-purple-600 text-sm font-medium">🎯 Assigned by Admin</span>
+                          ) : event.status === 'CheckedIn' ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-emerald-600 text-sm font-medium">✓ Checked In</span>
+                              <button
+                                onClick={() => setShowConfirmModal({
+                                  type: 'cancel',
+                                  eventId: event.id,
+                                  eventName: event.name
+                                })}
+                                disabled={actionLoading === event.id}
+                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition-colors disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           ) : (
-                            <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                              View Details →
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setShowConfirmModal({
+                                  type: 'checkin',
+                                  eventId: event.id,
+                                  eventName: event.name
+                                })}
+                                disabled={actionLoading === event.id}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {actionLoading === event.id ? 'Processing...' : '✓ Check In'}
+                              </button>
+                              <button
+                                onClick={() => setShowConfirmModal({
+                                  type: 'cancel',
+                                  eventId: event.id,
+                                  eventName: event.name
+                                })}
+                                disabled={actionLoading === event.id}
+                                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {actionLoading === event.id ? 'Processing...' : '✗ Cancel'}
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -518,5 +749,6 @@ export default function FindEvents() {
         </div>
       </div>
     </div>
+    </>
   );
 }

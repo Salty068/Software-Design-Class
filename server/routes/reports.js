@@ -10,6 +10,9 @@ const router = express.Router();
 
 async function buildVolunteerParticipationRows() {
   const profiles = await prisma.userProfile.findMany({
+    where: {
+      role: "Volunteer"
+    },
     include: {
       volunteerHistory: {
         include: { event: true },
