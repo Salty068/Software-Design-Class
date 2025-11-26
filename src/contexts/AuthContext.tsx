@@ -23,7 +23,6 @@ export interface AuthContextType {
   refreshUser: () => Promise<void>;
   isVolunteer: () => boolean;
   isAdmin: () => boolean;
-  isOrganizer: () => boolean;
   requireAuth: () => boolean;
   requireAdmin: () => boolean;
   requireRole: (role: 'volunteer' | 'admin' | 'organizer') => boolean;
@@ -214,8 +213,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Role checking functions
   const isVolunteer = () => user?.role === 'volunteer';
-  const isAdmin = () => user?.role === 'admin';
-  const isOrganizer = () => user?.role === 'organizer';
+  const isAdmin = () => user?.role === 'organizer';
 
   const requireAuth = () => {
     if (!isAuthenticated) {
@@ -254,7 +252,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshUser,
     isVolunteer,
     isAdmin,
-    isOrganizer,
     requireAuth,
     requireAdmin,
     requireRole,

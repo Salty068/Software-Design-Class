@@ -20,7 +20,6 @@ enum NoticeType {
 enum Role {
   Volunteer
   Organizer
-  Admin
 }
 
 model UserCredentials {

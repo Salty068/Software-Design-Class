@@ -27,17 +27,12 @@ export default function Login() {
       const success = await login(form.email, form.password);
       
       if (success) {
-        // Redirect based on role - admin to dashboard, volunteers to home
-        if (form.email.includes('admin')) {
-          navigate('/admin/dashboard');
-        } else {
-          navigate('/');
-        }
+        navigate('/');
       } else {
         setError('Login failed. Please try again.');
       }
     } catch (err) {
-      setError('Login failed. Please try again.');
+      setError('Login failed. Please try again.. ');
       console.error('Login error:', err);
     } finally {
       setLoading(false);

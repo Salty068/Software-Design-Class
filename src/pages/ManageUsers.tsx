@@ -192,7 +192,7 @@ export default function ManageUsers() {
                 >
                   <option value="all">All Roles</option>
                   <option value="volunteer">Volunteers</option>
-                  <option value="admin">Administrators</option>
+                  <option value="organizer">Administrators</option>
                 </select>
               </div>
 

@@ -11,6 +11,7 @@ const toVolunteerDTO = (p) => ({
   name: p.fullName,
   location: p.city,                // UI shows a single location string
   skills: Array.isArray(p.skills) ? p.skills : [],
+  availability: p.availability
 });
 
 const toEventDTO = (e) => ({
@@ -31,7 +32,7 @@ matching.get("/volunteers", async (_req, res) => {
     const rows = await prisma.userProfile.findMany({
       ...(Object.keys(whereClause).length > 0 && { where: whereClause }),
       orderBy: { createdAt: "desc" },
-      select: { userId: true, fullName: true, city: true, skills: true },
+      select: { userId: true, fullName: true, city: true, skills: true, availability: true },
     });
     res.json(rows.map(toVolunteerDTO));
   } catch {

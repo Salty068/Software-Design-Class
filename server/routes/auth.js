@@ -21,7 +21,7 @@ const passwordSchema = z.string().min(8).max(100);
 
 const nameSchema = z.string().trim().min(1).max(50);
 
-const roleSchema = z.enum(["Volunteer", "Organizer", "Admin"]).optional();
+const roleSchema = z.enum(["Volunteer", "Organizer"]).optional();
 
 const registerSchema = z.object({
   email: emailSchema,

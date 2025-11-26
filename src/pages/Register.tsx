@@ -200,7 +200,6 @@ export default function Register() {
               >
                 <option value="volunteer">Volunteer - Find and join volunteer opportunities</option>
                 <option value="organizer">Organizer - Create and manage volunteer events</option>
-                <option value="admin">Admin - Platform administration</option>
               </select>
             </div>
 

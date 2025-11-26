@@ -41,7 +41,6 @@ export default function RoleBasedHeader() {
     if (isAdmin()) {
       return [
         { to: "/", label: "Home" },
-        { to: "/admin/dashboard", label: "Admin Dashboard" },
         { to: "/admin/users", label: "Manage Users" },
         { to: "/event-manage", label: "Event Management" },
         { to: "/volunteer-matching", label: "Volunteer Matching" },

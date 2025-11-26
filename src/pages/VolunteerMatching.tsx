@@ -3,7 +3,7 @@ import { useNotify } from "../components/NotificationProvider.tsx";
 import { useAuth } from "../contexts/AuthContext.tsx";
 import CustomSelect from "../components/CustomSelect.tsx";
 
-type Volunteer = { id: string; name: string; location: string; skills: string[] };
+type Volunteer = { id: string; name: string; location: string; skills: string[], availability:string[] };
 type EventItem = { id: string; name: string; location: string; requiredSkills: string[]; date: string; urgency: "Low"|"Medium"|"High" };
 type Ranked = { event: EventItem; score: number };
 
@@ -249,6 +249,16 @@ export default function VolunteerMatchingDemo() {
                     ))}
                   </div>
                 </div>
+                {vol.availability && <div>
+                  <div className="text-sm font-medium text-gray-700 mb-2">Availability</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {vol.availability.map(s => (
+                      <span key={s} className="px-3 py-1 bg-orange-200 text-orange-800 rounded-full text-sm font-medium">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div> }
               </div>
             )}
           </div>
@@ -274,7 +284,7 @@ export default function VolunteerMatchingDemo() {
                   return {
                     value: id,
                     label: e.name,
-                    subtitle: `${e.location} • ${e.urgency} Priority • ${formatDate(e.date)}${typeof sc === "number" ? ` • Match: ${sc}%` : " • No Match Score"}`
+                    subtitle: `${e.location} • ${e.urgency} Priority • ${formatDate(e.date)}${typeof sc === "number" ? ` • Match Score: ${(sc*10).toFixed(2)}` : " • No Match Score"}`
                   };
                 })}
                 value={eventId}
@@ -346,8 +356,10 @@ export default function VolunteerMatchingDemo() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {events.map(e => {
               const sc = scoreById.get(e.id) ?? 0;
+              
               const missing = vol ? e.requiredSkills.filter(s => !vol.skills.includes(s)) : [];
-              const ok = vol ? missing.length === 0 && e.location === vol.location : false;
+              const unav = vol ? (vol.availability && vol.availability.some(avail => avail===e.date)) : false;
+              const ok = vol ? missing.length === 0 && e.location === vol.location && !unav : false;
               return (
                 <div key={e.id} className={`border-2 rounded-xl p-6 transition-all duration-200 hover:shadow-lg ${ok ? "border-green-300 bg-gradient-to-br from-green-50 to-green-100" : "border-orange-200 bg-gradient-to-br from-white to-orange-50 hover:border-orange-300 hover:to-orange-100"}`}>
                   <div className="flex justify-between items-start mb-4">
@@ -358,7 +370,7 @@ export default function VolunteerMatchingDemo() {
                       </span>
                       {typeof sc === "number" && sc > 0 && (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getScoreColor(sc)}`}>
-                          {sc}% Match
+                          {(sc*10).toFixed(2)} Match Score
                         </span>
                       )}
                     </div>
@@ -407,6 +419,7 @@ export default function VolunteerMatchingDemo() {
                     <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
                       {e.location !== vol.location && <div>📍 Location mismatch</div>}
                       {missing.length > 0 && <div>🔧 Missing skills: {missing.join(", ")}</div>}
+                      {unav && <div>Volunteer is unavailable</div>}
                     </div>
                   )}
                 </div>

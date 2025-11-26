@@ -9,13 +9,16 @@ export function score(vol, ev) {
   const sSkills = jaccard(vol.skills, ev.requiredSkills);
   const sLoc = vol.location === ev.location ? 1 : 0;
   const days = (new Date(ev.date).getTime() - Date.now()) / 86400000;
+  const availabilityResult = vol.availability.every(av =>
+    av == (new Date(ev.date).toLocaleDateString())
+  )
   const sTime = Number((days < 0 ? 0 : days <= 1 ? 1 : days <= 7 ? 0.8 : 0.5).toFixed(3));
   let wUrg = ev.urgency === "Critical" ? 1.2
            : ev.urgency === "High"     ? 1
            : ev.urgency === "Medium"   ? 0.6
            : 0.3;
   if (sSkills === 0 && sLoc === 0){ wUrg = 0};
-  return +(0.6*sSkills + 0.2*sLoc + 0.2*sTime*wUrg).toFixed(4);
+  return +(0.6*sSkills + 0.2*sLoc + 0.2*sTime*wUrg + availabilityResult*0.5).toFixed(4);
 }
 
 export default { score }
