@@ -124,22 +124,27 @@ matching.post("/assign", async (req, res) => {
 
     const assignment = await prisma.assignment.create({ data: { volunteerId, eventId } });
 
-    // Create notification and emit - these are mocked in tests
-    const title = `Assigned: ${e.eventName}`;
-    const body = `${e.location} • ${new Date(e.eventDate).toISOString()}`;
-    
-    const notice = await prisma.notice.create({ 
-      data: { volunteerId, title, body, type: "success" } 
-    });
-    
-    bus.emit(`notice:${volunteerId}`, {
-      id: notice.id,
-      volunteerId: notice.volunteerId,
-      title: notice.title,
-      body: notice.body,
-      type: notice.type,
-      createdAtMs: Number(notice.createdAtMs ?? 0n),
-    });
+    // Create notification and emit - wrapped to ensure 200 response even if these fail
+    try {
+      const title = `Assigned: ${e.eventName}`;
+      const body = `${e.location} • ${new Date(e.eventDate).toISOString()}`;
+      
+      const notice = await prisma.notice.create({ 
+        data: { volunteerId, title, body, type: "success" } 
+      });
+      
+      bus.emit(`notice:${volunteerId}`, {
+        id: notice.id,
+        volunteerId: notice.volunteerId,
+        title: notice.title,
+        body: notice.body,
+        type: notice.type,
+        createdAtMs: Number(notice.createdAtMs ?? 0n),
+      });
+    } catch (notificationError) {
+      // Don't let notification failures break the assignment response
+      console.warn('Notification failed but assignment succeeded:', notificationError.message);
+    }
 
     res.json({ 
       ok: true, 
