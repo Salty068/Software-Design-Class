@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { score } from "../matching.js";  
 
-const vol = { id:"v1", name:"Y", location:"UH", skills:["Tutoring","Computer Science","Math"] };
+const vol = { id:"v1", name:"Y", location:"UH", skills:["Tutoring","Computer Science","Math"], availability: ["2099-01-01"] };
 const evBase = { id:"e", name:"X", location:"UH", requiredSkills:[], date:"2099-01-01", urgency:"Low" };
 
 it("0 when location mismatch", () => {

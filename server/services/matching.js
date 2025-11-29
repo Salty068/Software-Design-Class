@@ -9,7 +9,7 @@ export function score(vol, ev) {
   const sSkills = jaccard(vol.skills, ev.requiredSkills);
   const sLoc = vol.location === ev.location ? 1 : 0;
   const days = (new Date(ev.date).getTime() - Date.now()) / 86400000;
-  const availabilityResult = vol.availability.every(av =>
+  const availabilityResult = vol.availability.some(av =>
     av == (new Date(ev.date).toLocaleDateString())
   )
   const sTime = Number((days < 0 ? 0 : days <= 1 ? 1 : days <= 7 ? 0.8 : 0.5).toFixed(3));

@@ -23,6 +23,7 @@ vi.mock("@prisma/client", () => {
     notice: {
       create: vi.fn(),
     },
+    
   };
   const PrismaClient = vi.fn(() => prismaMock);
   return { PrismaClient, prismaMock };
@@ -68,7 +69,7 @@ describe("GET /match/volunteers", () => {
 
     expect(prismaMock.userProfile.findMany).toHaveBeenCalledWith({
       orderBy: { createdAt: "desc" },
-      select: { userId: true, fullName: true, city: true, skills: true },
+      select: { userId: true, fullName: true, city: true, skills: true, availability: true},
     });
     expect(res.body).toEqual([
       { id: "u1", name: "Alex", location: "Austin", skills: ["js", "node"] },
